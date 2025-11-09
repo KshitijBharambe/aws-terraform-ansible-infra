@@ -1,0 +1,53 @@
+---
+# Common role default variables
+
+common_timezone: UTC
+common_domain: example.com
+common_package_state: present
+
+# Essential packages for Ubuntu/Debian
+common_packages:
+  - curl
+  - wget
+  - vim
+  - git
+  - htop
+  - unzip
+  - software-properties-common
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - python3
+  - python3-pip
+  - python3-venv
+  - build-essential
+
+# Default admin user (can be overridden in inventory)
+admin_users: []
+
+# Bash aliases for all users
+common_bash_aliases:
+  - "alias ll='ls -alF'"
+  - "alias la='ls -A'"
+  - "alias l='ls -CF'"
+  - "alias ..='cd ..'"
+  - "alias ...='cd ../..'"
+  - "alias grep='grep --color=auto'"
+  - "alias fgrep='fgrep --color=auto'"
+  - "alias egrep='egrep --color=auto'"
+
+# Common directories
+common_directories:
+  - /opt/apps
+  - /var/log/apps
+  - /etc/apps
+  - /tmp/apps
+  - /var/backups/apps
+
+# Python packages
+common_python_packages:
+  - pip
+  - setuptools
+  - wheel
+  - virtualenv

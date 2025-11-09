@@ -1,0 +1,50 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+tfplan
+crash.log
+
+# Ansible
+*.retry
+.ansible/
+ansible.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+*.pem
+*.key
+!*.pub
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-compose.override.yml
+localstack-data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+ENV/
+
+# Docs
+Project Docs

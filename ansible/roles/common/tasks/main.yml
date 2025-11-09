@@ -1,0 +1,153 @@
+---
+# Common role tasks - executed on all servers
+
+- name: Update apt package cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  changed_when: false
+
+- name: Install essential packages
+  apt:
+    name: "{{ common_packages }}"
+    state: "{{ common_package_state }}"
+  when: common_packages is defined
+
+- name: Configure timezone
+  timezone:
+    name: "{{ common_timezone }}"
+  when: common_timezone is defined
+
+- name: Set hostname based on inventory
+  hostname:
+    name: "{{ inventory_hostname }}"
+  when: inventory_hostname != ansible_fqdn
+
+- name: Update /etc/hosts with inventory name
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ inventory_hostname }} {{ ansible_fqdn }}"
+    state: present
+
+- name: Install and configure chrony for time synchronization
+  apt:
+    name: chrony
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Ensure chrony is running and enabled
+  systemd:
+    name: chrony
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+
+- name: Create admin users
+  user:
+    name: "{{ item.name }}"
+    groups: "{{ item.groups }}"
+    shell: "{{ item.shell }}"
+    create_home: "{{ item.create_home }}"
+    password: "{{ item.password | default(omit) }}"
+    state: present
+  loop: "{{ admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: admin_users is defined
+
+- name: Create .ssh directory for admin users
+  file:
+    path: "/home/{{ item.name }}/.ssh"
+    state: directory
+    mode: "0700"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+  loop: "{{ admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: admin_users is defined and item.ssh_keys is defined
+
+- name: Add SSH keys for admin users
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ ssh_key }}"
+    state: present
+  loop: "{{ admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    ssh_keys: "{{ item.ssh_keys | default([]) }}"
+  when: admin_users is defined and item.ssh_keys is defined
+  with_items: "{{ item.ssh_keys }}"
+
+- name: Configure sudo access for admin users
+  lineinfile:
+    path: /etc/sudoers.d/{{ item.name }}
+    line: "{{ item.name }} ALL=(ALL) NOPASSWD:ALL"
+    state: present
+    create: yes
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  loop: "{{ admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: admin_users is defined
+
+- name: Configure bash aliases for all users
+  lineinfile:
+    path: /etc/bash.bashrc
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "alias ll='ls -alF'"
+    - "alias la='ls -A'"
+    - "alias l='ls -CF'"
+    - "alias ..='cd ..'"
+    - "alias ...='cd ../..'"
+  when: ansible_os_family == "Debian"
+
+- name: Create common directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/apps
+    - /var/log/apps
+    - /etc/apps
+
+- name: Install Python dependencies
+  pip:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - pip
+    - setuptools
+    - wheel
+  when: ansible_python_version is defined
+
+- name: Create application log directory
+  file:
+    path: "{{ app_log_directory | default('/var/log/apps') }}"
+    state: directory
+    mode: "0755"
+  when: app_log_directory is defined
+
+- name: Create application user
+  user:
+    name: "{{ app_name }}"
+    groups: sudo
+    shell: /bin/bash
+    create_home: yes
+    state: present
+  when: app_name is defined
+
+- name: Create application directory
+  file:
+    path: "{{ application_directory }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ app_name }}"
+    group: "{{ app_name }}"
+  when: application_directory is defined

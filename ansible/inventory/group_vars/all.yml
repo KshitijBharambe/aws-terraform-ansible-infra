@@ -1,0 +1,68 @@
+---
+# Global variables for all hosts
+
+# Common settings
+common_timezone: UTC
+common_domain: example.com
+common_package_state: present
+
+# Essential packages
+common_packages:
+  - curl
+  - wget
+  - vim
+  - git
+  - htop
+  - unzip
+  - software-properties-common
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - python3
+  - python3-pip
+  - python3-venv
+
+# Admin users configuration
+admin_users:
+  - name: admin
+    groups: sudo,adm
+    shell: /bin/bash
+    create_home: true
+    password: "{{ vault_admin_password | default(omit) }}"
+    ssh_keys:
+      - "{{ vault_admin_ssh_key | default(omit) }}"
+
+# Security settings
+security_ssh_port: 22
+security_allowed_users:
+  - ubuntu
+  - admin
+security_fail2ban_ban_time: 600
+security_fail2ban_max_retry: 5
+
+# Monitoring settings
+monitoring_namespace: "MyApp"
+monitoring_log_groups:
+  - /var/log/syslog
+  - /var/log/auth.log
+  - /var/log/nginx
+monitoring_metrics_collection_interval: 60
+
+# Web server settings
+webserver_type: nginx
+webserver_port: 80
+webserver_ssl_port: 443
+webserver_server_name: "{{ common_domain }}"
+application_directory: /var/www/app
+
+# Backup settings
+backup_schedule: "0 2 * * *" # Daily at 2 AM
+backup_retention_days: 7
+backup_s3_bucket: "{{ vault_backup_s3_bucket | default(omit) }}"
+
+# Application settings
+app_name: myapp
+app_version: latest
+app_port: 8080
+app_environment: production

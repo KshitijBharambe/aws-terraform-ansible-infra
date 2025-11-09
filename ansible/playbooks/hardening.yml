@@ -1,0 +1,195 @@
+---
+# Security hardening playbook
+# This playbook applies comprehensive security hardening to all servers
+
+- name: Apply comprehensive security hardening
+  hosts: all
+  become: yes
+  roles:
+    - security
+  vars:
+    security_fail2ban_enabled: true
+    security_enable_audit_monitoring: true
+    security_enable_aide: true
+    security_configure_automatic_updates: true
+  tags:
+    - security
+    - hardening
+    - compliance
+
+- name: Apply server-specific security configurations
+  hosts: all
+  become: yes
+  tasks:
+    - name: Configure kernel security parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: "net.ipv4.ip_forward", value: "0" }
+        - { name: "net.ipv4.conf.all.send_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.accept_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.accept_source_route", value: "0" }
+        - { name: "net.ipv4.conf.all.secure_redirects", value: "1" }
+        - { name: "net.ipv4.tcp_syncookies", value: "1" }
+        - { name: "net.ipv4.conf.all.rp_filter", value: "1" }
+        - { name: "kernel.dmesg_restrict", value: "1" }
+        - { name: "kernel.kptr_restrict", value: "2" }
+      notify: Reload sysctl
+
+    - name: Configure file limits
+      pam_limits:
+        domain: "{{ item.domain }}"
+        limit_type: "{{ item.type }}"
+        value: "{{ item.value }}"
+        backup: yes
+      loop:
+        - { domain: "*", type: "soft", value: "nofile", limit: "65536" }
+        - { domain: "*", type: "hard", value: "nofile", limit: "65536" }
+        - { domain: "*", type: "soft", value: "nproc", limit: "32768" }
+        - { domain: "*", type: "hard", value: "nproc", limit: "32768" }
+
+    - name: Disable vulnerable network protocols
+      lineinfile:
+        path: /etc/modprobe.d/blacklist.conf
+        line: "install {{ item.protocol }} /bin/true"
+        state: present
+        create: yes
+      loop:
+        - { protocol: "dccp" }
+        - { protocol: "sctp" }
+        - { protocol: "rds" }
+        - { protocol: "tipc" }
+
+    - name: Configure secure umask
+      lineinfile:
+        path: /etc/profile
+        line: "umask 027"
+        state: present
+        insertbefore: "^# End of file"
+
+    - name: Configure login banner
+      copy:
+        content: |
+          ********************************************************************************
+          *                            WARNING                                       *
+          *                This system is for authorized users only.            *
+          *                All activity is monitored and recorded.            *
+          *                Unauthorized access is prohibited.               *
+          ********************************************************************************
+        dest: /etc/issue.net
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: Set secure file permissions
+      file:
+        path: "{{ item.path }}"
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner | default('root') }}"
+        group: "{{ item.group | default('root') }}"
+        recurse: "{{ item.recurse | default(false) }}"
+      loop:
+        - { path: "/boot", mode: "0755", recurse: true }
+        - { path: "/etc/ssh", mode: "0755", recurse: true }
+        - { path: "/etc/ssl", mode: "0755", recurse: true }
+        - { path: "/var/log", mode: "0750", recurse: true }
+        - { path: "/var/tmp", mode: "1777", recurse: true }
+        - { path: "/tmp", mode: "1777", recurse: true }
+
+    - name: Remove dangerous SUID binaries
+      file:
+        path: "{{ item }}"
+        mode: "0755"
+      loop:
+        - /usr/bin/bsd-write
+        - /usr/bin/chfn
+        - /usr/bin/chsh
+        - /usr/bin/gpasswd
+        - /usr/bin/newgrp
+        - /usr/bin/passwd
+        - /usr/bin/wall
+        - /usr/sbin/traceroute
+      ignore_errors: yes
+
+    - name: Configure AppArmor profiles
+      command: aa-enforce /etc/apparmor.d/*
+      register: apparmor_status
+      changed_when: false
+      ignore_errors: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Enable AppArmor on boot
+      lineinfile:
+        path: /etc/default/grub
+        line: "GRUB_CMDLINE_LINUX_DEFAULT='{{ ansible_cmdline_default | default('quiet splash') }} apparmor=1 security=apparmor'"
+        regexp: "^GRUB_CMDLINE_LINUX_DEFAULT="
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Create security scan script
+      template:
+        src: security-scan.sh.j2
+        dest: /usr/local/bin/security-scan.sh
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Schedule regular security scans
+      cron:
+        name: "Security Scan"
+        job: "/usr/local/bin/security-scan.sh"
+        minute: "0"
+        hour: "2"
+        day: "*"
+        month: "*"
+        weekday: "0" # Weekly on Sunday
+        user: root
+        state: present
+
+    - name: Generate security hardening report
+      template:
+        src: hardening-report.j2
+        dest: /tmp/security-hardening-report-{{ inventory_hostname }}.txt
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: Display hardening completion message
+      debug:
+        msg: |
+          Security hardening completed for {{ inventory_hostname }}
+          Security measures applied:
+          - SSH hardening
+          - Firewall configuration (UFW)
+          - Fail2ban intrusion prevention
+          - Audit logging enabled
+          - Kernel security parameters
+          - File permissions secured
+          - AppArmor enforced
+          - Automated security scans scheduled
+
+  tags:
+    - hardening
+    - security
+    - compliance
+    - post-hardening
+
+- name: Validate security hardening
+  hosts: all
+  become: yes
+  tasks:
+    - name: Run security validation
+      command: /usr/local/bin/security-scan.sh
+      register: security_validation
+      changed_when: false
+
+    - name: Display security validation results
+      debug:
+        msg: "Security validation: {{ security_validation.stdout }}"
+
+  tags:
+    - validation
+    - security-check
+    - post-hardening

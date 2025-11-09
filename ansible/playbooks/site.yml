@@ -1,0 +1,104 @@
+---
+# Site playbook - Master configuration for all servers
+# This playbook configures all servers with common, security, and monitoring
+
+- name: Configure all servers with common settings
+  hosts: all
+  become: yes
+  roles:
+    - common
+    - security
+    - monitoring
+  tags:
+    - common
+    - security
+    - monitoring
+    - base
+
+- name: Configure web servers
+  hosts: webservers
+  become: yes
+  roles:
+    - webserver
+    - backup
+  tags:
+    - web
+    - webservers
+    - webserver
+
+- name: Configure application servers
+  hosts: appservers
+  become: yes
+  roles:
+    - backup
+  tags:
+    - app
+    - appservers
+    - application
+
+- name: Apply post-configuration tasks
+  hosts: all
+  become: yes
+  tasks:
+    - name: Display configuration summary
+      debug:
+        msg: |
+          Server: {{ inventory_hostname }}
+          Role: {{ server_role | default('unknown') }}
+          Environment: {{ app_environment | default('production') }}
+          Configuration completed successfully!
+
+    - name: Create configuration timestamp
+      copy:
+        content: "{{ ansible_date_time.iso8601 }} - Ansible configuration completed\n"
+        dest: /etc/ansible_last_run
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Verify critical services are running
+      service_facts:
+      register: services_status
+
+    - name: Check essential services status
+      assert:
+        that:
+          - services_status.ansible_facts.services['ssh'].state == 'running'
+          - services_status.ansible_facts.services['ufw'].state == 'running'
+        fail_msg: "Essential services are not running properly"
+        success_msg: "All essential services are running"
+      when: ansible_os_family == "Debian"
+
+    - name: Display service status
+      debug:
+        msg: "Service {{ item.key }} is {{ item.value.state }}"
+      loop: "{{ services_status.ansible_facts.services | dict2items }}"
+      when: services_status.ansible_facts.services is defined
+
+    - name: Generate configuration report
+      template:
+        src: config-report.j2
+        dest: /tmp/ansible-config-report-{{ inventory_hostname }}.txt
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: Send notification (if configured)
+      uri:
+        url: "{{ notification_webhook | default(omit) }}"
+        method: POST
+        body_format: json
+        body:
+          text: "Ansible configuration completed for {{ inventory_hostname }} ({{ server_role | default('unknown') }})"
+          username: "ansible-bot"
+        headers:
+          Content-Type: "application/json"
+      when:
+        - notification_webhook is defined
+        - notification_webhook != ""
+      ignore_errors: yes
+      delegate_to: localhost
+
+  tags:
+    - post-config
+    - verification
+    - reporting

@@ -1,0 +1,112 @@
+# SSH daemon configuration
+# This file is managed by Ansible - DO NOT EDIT MANUALLY
+
+# Basic settings
+Port {{ security_ssh_port | default(22) }}
+Protocol 2
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+# Logging
+SyslogFacility AUTH
+LogLevel INFO
+
+# Authentication settings
+LoginGraceTime 60
+PermitRootLogin no
+StrictModes yes
+MaxAuthTries 3
+MaxSessions 3
+
+# Public key authentication
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Password authentication (disabled for security)
+PasswordAuthentication no
+PermitEmptyPasswords no
+
+# Challenge response authentication
+ChallengeResponseAuthentication no
+
+# Kerberos options
+KerberosAuthentication no
+KerberosOrLocalPasswd yes
+KerberosTicketCleanup yes
+
+# GSSAPI options
+GSSAPIAuthentication no
+GSSAPICleanupCredentials no
+
+# X11 forwarding (disabled for security)
+X11Forwarding no
+X11UseLocalhost yes
+PrintMotd no
+PrintLastLog yes
+TCPKeepAlive yes
+
+# Use PAM authentication
+UsePAM yes
+
+# Client settings
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Connection settings
+UsePrivilegeSeparation yes
+Subsystem sftp /usr/lib/openssh/sftp-server
+
+# Allow specific users
+{% if security_allowed_users is defined %}
+AllowUsers {{ security_allowed_users | join(' ') }}
+{% endif %}
+
+# Allow specific groups if defined
+{% if security_allowed_groups is defined %}
+AllowGroups {{ security_allowed_groups | join(' ') }}
+{% endif %}
+
+# Deny specific users if defined
+{% if security_denied_users is defined %}
+DenyUsers {{ security_denied_users | join(' ') }}
+{% endif %}
+
+# Banner
+Banner /etc/ssh/banners/issue.net
+
+# Disable tunneling
+PermitTunnel no
+PermitOpen none
+
+# Disable port forwarding
+AllowTcpForwarding no
+GatewayPorts no
+
+# Disable agent forwarding
+ForwardAgent no
+
+# Disable X11 authentication
+X11UseLocalhost yes
+
+# Set strict modes
+StrictModes yes
+
+# Ignore rhosts
+IgnoreRhosts yes
+IgnoreUserKnownHosts yes
+
+# Host-based authentication
+HostbasedAuthentication no
+
+# Additional security options
+Compression no
+UseDNS no
+
+# Connection limits
+MaxStartups 10:30:60
+MaxSessions 3
+
+# Timeout settings
+ClientAliveInterval 300
+ClientAliveCountMax 2

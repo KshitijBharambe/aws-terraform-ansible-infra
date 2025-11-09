@@ -1,0 +1,257 @@
+---
+# Backup role - main tasks
+
+- name: Install backup packages
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - awscli
+    - s3cmd
+    - rclone
+    - duplicity
+    - rsync
+    - gzip
+    - bzip2
+  when: ansible_os_family == "Debian"
+
+- name: Create backup directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - /opt/backups
+    - /var/backups
+    - /etc/backups
+    - /tmp/backups
+
+- name: Create backup scripts directory
+  file:
+    path: /usr/local/bin/backup-scripts
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create backup configuration
+  template:
+    src: backup-config.j2
+    dest: /etc/backups/backup.conf
+    owner: root
+    group: root
+    mode: "0600"
+  when: backup_enable_config | default(true)
+
+- name: Create system backup script
+  template:
+    src: system-backup.sh.j2
+    dest: /usr/local/bin/backup-scripts/system-backup.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create database backup script
+  template:
+    src: database-backup.sh.j2
+    dest: /usr/local/bin/backup-scripts/database-backup.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: backup_enable_database | default(false)
+
+- name: Create application backup script
+  template:
+    src: application-backup.sh.j2
+    dest: /usr/local/bin/backup-scripts/application-backup.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: application_directory is defined
+
+- name: Create log backup script
+  template:
+    src: log-backup.sh.j2
+    dest: /usr/local/bin/backup-scripts/log-backup.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create configuration backup script
+  template:
+    src: config-backup.sh.j2
+    dest: /usr/local/bin/backup-scripts/config-backup.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create backup verification script
+  template:
+    src: backup-verify.sh.j2
+    dest: /usr/local/bin/backup-scripts/backup-verify.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create backup cleanup script
+  template:
+    src: backup-cleanup.sh.j2
+    dest: /usr/local/bin/backup-scripts/backup-cleanup.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Schedule system backups
+  cron:
+    name: "System Backup"
+    job: "/usr/local/bin/backup-scripts/system-backup.sh"
+    minute: "{{ backup_system_minute | default('0') }}"
+    hour: "{{ backup_system_hour | default('2') }}"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: backup_enable_system | default(true)
+
+- name: Schedule database backups
+  cron:
+    name: "Database Backup"
+    job: "/usr/local/bin/backup-scripts/database-backup.sh"
+    minute: "{{ backup_database_minute | default('30') }}"
+    hour: "{{ backup_database_hour | default('3') }}"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: backup_enable_database | default(false)
+
+- name: Schedule application backups
+  cron:
+    name: "Application Backup"
+    job: "/usr/local/bin/backup-scripts/application-backup.sh"
+    minute: "{{ backup_application_minute | default('0') }}"
+    hour: "{{ backup_application_hour | default('1') }}"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: application_directory is defined
+
+- name: Schedule log backups
+  cron:
+    name: "Log Backup"
+    job: "/usr/local/bin/backup-scripts/log-backup.sh"
+    minute: "{{ backup_log_minute | default('0') }}"
+    hour: "{{ backup_log_hour | default('4') }}"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: backup_enable_logs | default(true)
+
+- name: Schedule backup verification
+  cron:
+    name: "Backup Verification"
+    job: "/usr/local/bin/backup-scripts/backup-verify.sh"
+    minute: "{{ backup_verify_minute | default('0') }}"
+    hour: "{{ backup_verify_hour | default('5') }}"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: backup_enable_verification | default(true)
+
+- name: Schedule backup cleanup
+  cron:
+    name: "Backup Cleanup"
+    job: "/usr/local/bin/backup-scripts/backup-cleanup.sh"
+    minute: "{{ backup_cleanup_minute | default('0') }}"
+    hour: "{{ backup_cleanup_hour | default('6') }}"
+    day: "*"
+    month: "*"
+    weekday: "0" # Weekly on Sunday
+    user: root
+    state: present
+  when: backup_enable_cleanup | default(true)
+
+- name: Configure S3 backup (if AWS)
+  template:
+    src: s3-backup-config.j2
+    dest: /etc/backups/s3-config.sh
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - backup_s3_bucket is defined
+    - backup_s3_bucket != ""
+
+- name: Create log rotation for backup logs
+  template:
+    src: backup-logrotate.j2
+    dest: /etc/logrotate.d/backups
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Test backup configuration
+  command: /usr/local/bin/backup-scripts/system-backup.sh --test
+  register: backup_test
+  changed_when: false
+  ignore_errors: yes
+
+- name: Display backup status
+  debug:
+    msg: "Backup configuration test: {{ backup_test.stdout | default('Test completed') }}"
+  ignore_errors: yes
+
+- name: Create backup monitoring script
+  template:
+    src: backup-monitor.sh.j2
+    dest: /usr/local/bin/backup-monitor.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: backup_enable_monitoring | default(false)
+
+- name: Schedule backup monitoring
+  cron:
+    name: "Backup Monitoring"
+    job: "/usr/local/bin/backup-monitor.sh"
+    minute: "*/15"
+    hour: "*"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: backup_enable_monitoring | default(false)
+
+- name: Create backup report generator
+  template:
+    src: backup-report.sh.j2
+    dest: /usr/local/bin/backup-report.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: backup_enable_reports | default(false)
+
+- name: Schedule backup reports
+  cron:
+    name: "Backup Report"
+    job: "/usr/local/bin/backup-report.sh"
+    minute: "0"
+    hour: "7"
+    day: "1"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: backup_enable_reports | default(false)

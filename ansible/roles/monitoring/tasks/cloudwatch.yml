@@ -1,0 +1,151 @@
+---
+# CloudWatch agent configuration tasks
+
+- name: Download CloudWatch agent package
+  get_url:
+    url: "https://s3.amazonaws.com/amazoncloudwatch-agent-{{ ansible_architecture }}/amazon-cloudwatch-agent.deb"
+    dest: /tmp/amazon-cloudwatch-agent.deb
+    mode: "0644"
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_enable_cloudwatch | default(true)
+
+- name: Install CloudWatch agent
+  apt:
+    deb: /tmp/amazon-cloudwatch-agent.deb
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_enable_cloudwatch | default(true)
+
+- name: Clean up CloudWatch agent package
+  file:
+    path: /tmp/amazon-cloudwatch-agent.deb
+    state: absent
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Create CloudWatch agent configuration directory
+  file:
+    path: /opt/aws/amazon-cloudwatch-agent/etc
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Configure CloudWatch agent
+  template:
+    src: amazon-cloudwatch-agent.json.j2
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart CloudWatch agent
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Ensure CloudWatch agent service is enabled and running
+  systemd:
+    name: amazon-cloudwatch-agent
+    state: started
+    enabled: yes
+    when:
+      - ansible_os_family == "Debian"
+      - monitoring_enable_cloudwatch | default(true)
+
+- name: Create CloudWatch log groups
+  shell: |
+    aws logs create-log-group {{ item }} --region {{ monitoring_aws_region | default('us-east-1') }} || true
+  loop: "{{ monitoring_log_groups }}"
+  when:
+    - monitoring_log_groups is defined
+    - monitoring_enable_cloudwatch | default(true)
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key | default(omit) }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key | default(omit) }}"
+    AWS_DEFAULT_REGION: "{{ monitoring_aws_region | default('us-east-1') }}"
+
+- name: Configure CloudWatch log retention
+  shell: |
+    aws logs put-retention-policy --log-group-name {{ item }} --retention-in-days {{ monitoring_log_retention_days | default(7) }} --region {{ monitoring_aws_region | default('us-east-1') }}
+  loop: "{{ monitoring_log_groups }}"
+  when:
+    - monitoring_log_groups is defined
+    - monitoring_enable_cloudwatch | default(true)
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key | default(omit) }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key | default(omit) }}"
+    AWS_DEFAULT_REGION: "{{ monitoring_aws_region | default('us-east-1') }}"
+
+- name: Create CloudWatch custom metrics configuration
+  template:
+    src: cloudwatch-metrics.j2
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/custom-metrics.json
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - monitoring_custom_metrics is defined
+    - monitoring_enable_cloudwatch | default(true)
+
+- name: Configure CloudWatch alarms
+  template:
+    src: cloudwatch-alarms.json.j2
+    dest: /tmp/cloudwatch-alarms.json
+    owner: root
+    group: root
+    mode: "0644"
+  when: monitoring_enable_cloudwatch_alarms | default(false)
+
+- name: Create CloudWatch alarms
+  shell: |
+    aws cloudwatch put-metric-alarm --cli-input-json file:///tmp/cloudwatch-alarms.json --region {{ monitoring_aws_region | default('us-east-1') }}
+  when:
+    - monitoring_enable_cloudwatch_alarms | default(false)
+    - monitoring_enable_cloudwatch | default(true)
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key | default(omit) }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key | default(omit) }}"
+    AWS_DEFAULT_REGION: "{{ monitoring_aws_region | default('us-east-1') }}"
+
+- name: Clean up CloudWatch alarms configuration
+  file:
+    path: /tmp/cloudwatch-alarms.json
+    state: absent
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Test CloudWatch agent configuration
+  command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -m ec2
+  register: cloudwatch_config_test
+  changed_when: false
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Validate CloudWatch agent configuration
+  debug:
+    msg: "CloudWatch configuration test: {{ cloudwatch_config_test.stdout }}"
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Create CloudWatch agent status script
+  template:
+    src: cloudwatch-status.sh.j2
+    dest: /usr/local/bin/cloudwatch-status.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Add CloudWatch status check to cron
+  cron:
+    name: "CloudWatch Status Check"
+    job: "/usr/local/bin/cloudwatch-status.sh"
+    minute: "*/5"
+    user: root
+    state: present
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Install AWS CLI for CloudWatch integration
+  apt:
+    name: awscli
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_enable_cloudwatch | default(true)

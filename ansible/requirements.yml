@@ -1,0 +1,69 @@
+---
+# Ansible Galaxy requirements
+# Collections and roles required for this project
+
+collections:
+  # AWS collection for AWS resources management
+  - name: amazon.aws
+    version: ">=5.0.0"
+    source: https://galaxy.ansible.com
+
+  # Community general collection
+  - name: community.general
+    version: ">=6.0.0"
+    source: https://galaxy.ansible.com
+
+  # Security collection
+  - name: community.security
+    version: ">=1.0.0"
+    source: https://galaxy.ansible.com
+
+  # Monitoring collection
+  - name: community.monitoring
+    version: ">=1.0.0"
+    source: https://galaxy.ansible.com
+
+  # PostgreSQL collection (if needed)
+  - name: community.postgresql
+    version: ">=2.0.0"
+    source: https://galaxy.ansible.com
+    when: "'postgresql' in group_names"
+
+  # Docker collection (if needed)
+  - name: community.docker
+    version: ">=3.0.0"
+    source: https://galaxy.ansible.com
+    when: "'docker' in group_names"
+
+roles:
+  # Additional roles from Ansible Galaxy (if needed)
+  # - name: geerlingguy.security
+  #   version: 2.0.0
+  #   source: https://galaxy.ansible.com
+
+  # - name: cloudalchemy.monitoring
+  #   version: 1.2.0
+  #   source: https://galaxy.ansible.com
+# Optional: Include specific versions for production stability
+# Uncomment and modify as needed for your environment
+
+# Development environment (latest versions)
+# collections:
+#   - name: amazon.aws
+#     version: "latest"
+#   - name: community.general
+#     version: "latest"
+
+# Production environment (pinned versions)
+# collections:
+#   - name: amazon.aws
+#     version: "5.4.0"
+#   - name: community.general
+#     version: "6.1.0"
+
+# Testing environment (specific versions)
+# collections:
+#   - name: amazon.aws
+#     version: "5.3.0"
+#   - name: community.general
+#     version: "6.0.1"

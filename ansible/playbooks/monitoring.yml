@@ -1,0 +1,195 @@
+---
+# Monitoring setup playbook
+# This playbook configures comprehensive monitoring on all servers
+
+- name: Configure monitoring on all servers
+  hosts: all
+  become: yes
+  roles:
+    - monitoring
+  vars:
+    monitoring_enable_cloudwatch: true
+    monitoring_enable_system_monitoring: true
+    monitoring_enable_log_monitoring: true
+    monitoring_enable_service_monitoring: true
+    monitoring_enable_health_checks: true
+  tags:
+    - monitoring
+    - setup
+    - configuration
+
+- name: Configure server-specific monitoring
+  hosts: all
+  become: yes
+  tasks:
+    - name: Create monitoring configuration summary
+      debug:
+        msg: |
+          Server: {{ inventory_hostname }}
+          Role: {{ server_role | default('unknown') }}
+          Monitoring enabled:
+          - CloudWatch: {{ monitoring_enable_cloudwatch | default(true) }}
+          - System monitoring: {{ monitoring_enable_system_monitoring | default(true) }}
+          - Log monitoring: {{ monitoring_enable_log_monitoring | default(true) }}
+          - Service monitoring: {{ monitoring_enable_service_monitoring | default(true) }}
+          - Health checks: {{ monitoring_enable_health_checks | default(true) }}
+          Metrics collection interval: {{ monitoring_metrics_collection_interval | default(60) }}s
+          Log groups: {{ monitoring_log_groups | default([]) }}
+
+    - name: Test monitoring configuration
+      command: /usr/local/bin/system-health-check.sh
+      register: monitoring_test
+      changed_when: false
+
+    - name: Validate monitoring services
+      service_facts:
+      register: services_status
+
+    - name: Check monitoring service status
+      assert:
+        that:
+          - services_status.ansible_facts.services['amazon-cloudwatch-agent'].state == 'running'
+          - services_status.ansible_facts.services['sysstat'].state == 'running'
+        fail_msg: "Monitoring services are not running properly"
+        success_msg: "All monitoring services are running"
+      when:
+        - monitoring_enable_cloudwatch | default(true)
+        - services_status.ansible_facts.services is defined
+
+    - name: Display monitoring service status
+      debug:
+        msg: "Monitoring service {{ item.key }} is {{ item.value.state }}"
+      loop: "{{ services_status.ansible_facts.services | dict2items }}"
+      when: services_status.ansible_facts.services is defined
+
+    - name: Create monitoring dashboard
+      template:
+        src: monitoring-dashboard.html.j2
+        dest: "{{ application_directory | default('/var/www') }}/monitoring.html"
+        owner: "{{ app_name | default('www-data') }}"
+        group: "{{ app_name | default('www-data') }}"
+        mode: "0644"
+      when:
+        - monitoring_enable_dashboard | default(false)
+        - application_directory is defined
+
+    - name: Configure monitoring alerts
+      template:
+        src: monitoring-alerts.j2
+        dest: /etc/monitoring/alerts.conf
+        owner: root
+        group: root
+        mode: "0644"
+      when: monitoring_enable_alerts | default(false)
+
+    - name: Setup monitoring scripts
+      template:
+        src: monitoring-scripts.j2
+        dest: /usr/local/bin/monitoring-setup.sh
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Run monitoring setup
+      command: /usr/local/bin/monitoring-setup.sh
+      register: monitoring_setup
+      changed_when: false
+
+    - name: Display monitoring setup results
+      debug:
+        msg: "Monitoring setup: {{ monitoring_setup.stdout }}"
+
+    - name: Generate monitoring report
+      template:
+        src: monitoring-report.j2
+        dest: /tmp/monitoring-report-{{ inventory_hostname }}.txt
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: Send monitoring notification (if configured)
+      uri:
+        url: "{{ notification_webhook | default(omit) }}"
+        method: POST
+        body_format: json
+        body:
+          text: "Monitoring configuration completed for {{ inventory_hostname }} ({{ server_role | default('unknown') }})"
+          username: "ansible-bot"
+        headers:
+          Content-Type: "application/json"
+      when:
+        - notification_webhook is defined
+        - notification_webhook != ""
+      ignore_errors: yes
+      delegate_to: localhost
+
+  tags:
+    - monitoring-setup
+    - post-config
+    - verification
+    - reporting
+
+- name: Validate monitoring deployment
+  hosts: all
+  become: yes
+  tasks:
+    - name: Wait for monitoring services to stabilize
+      pause:
+        seconds: 30
+      when: monitoring_enable_cloudwatch | default(true)
+
+    - name: Check CloudWatch agent status
+      systemd:
+        name: amazon-cloudwatch-agent
+      register: cloudwatch_status
+      when: monitoring_enable_cloudwatch | default(true)
+
+    - name: Test CloudWatch metrics collection
+      command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
+      register: cloudwatch_test
+      changed_when: false
+      when: monitoring_enable_cloudwatch | default(true)
+
+    - name: Verify log collection
+      stat:
+        path: "{{ item }}"
+      loop: "{{ monitoring_log_groups | default([]) }}"
+      register: log_files
+      when: monitoring_enable_log_monitoring | default(true)
+
+    - name: Check log file accessibility
+      assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Log file {{ item.item }} is not accessible"
+        success_msg: "All log files are accessible"
+      loop: "{{ log_files.results }}"
+      when: monitoring_enable_log_monitoring | default(true)
+
+    - name: Test system monitoring scripts
+      command: "{{ item }}"
+      loop:
+        - "/usr/local/bin/system-health-check.sh"
+        - "/usr/local/bin/disk-usage-monitor.sh"
+        - "/usr/local/bin/memory-monitor.sh"
+      register: system_monitoring_tests
+      changed_when: false
+
+    - name: Validate system monitoring
+      debug:
+        msg: "System monitoring test {{ item.item }}: {{ 'PASSED' if item.rc == 0 else 'FAILED' }}"
+      loop: "{{ system_monitoring_tests.results }}"
+      when: system_monitoring_tests is defined
+
+    - name: Display final monitoring status
+      debug:
+        msg: |
+          Monitoring deployment completed for {{ inventory_hostname }}
+          Services status: {{ 'RUNNING' if cloudwatch_status.status.ActiveState == 'running' else 'STOPPED' }}
+          CloudWatch agent: {{ 'ACTIVE' if cloudwatch_test.rc == 0 else 'INACTIVE' }}
+          Log collection: {{ 'ACTIVE' if log_files.results | selectattr('stat.exists') | list | length > 0 else 'INACTIVE' }}
+          System monitoring: {{ 'ACTIVE' if system_monitoring_tests.results | selectattr('rc', 'equalto', 0) | list | length == system_monitoring_tests.results | length else 'PARTIAL' }}
+
+  tags:
+    - monitoring-validation
+    - health-check
+    - verification

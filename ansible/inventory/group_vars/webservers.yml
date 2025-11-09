@@ -1,0 +1,50 @@
+---
+# Web server specific variables
+
+# Server role
+server_role: web
+
+# Firewall settings for web servers
+firewall_allowed_ports:
+  - port: 22
+    proto: tcp
+  - port: 80
+    proto: tcp
+  - port: 443
+    proto: tcp
+
+# Security settings
+security_fail2ban_enabled: true
+security_fail2ban_jails:
+  - sshd
+  - nginx-http-auth
+  - nginx-limit-req
+
+# Monitoring specific to web servers
+monitoring_custom_metrics:
+  - name: nginx_connections
+    pattern: "nginx.*connections"
+  - name: http_response_time
+    pattern: "http.*response_time"
+
+# Web server configuration
+webserver_worker_processes: auto
+webserver_worker_connections: 1024
+webserver_keepalive_timeout: 65
+webserver_client_max_body_size: 10M
+
+# SSL settings
+webserver_ssl_enabled: true
+webserver_ssl_protocols:
+  - TLSv1.2
+  - TLSv1.3
+webserver_ssl_ciphers:
+  - ECDHE-RSA-AES256-GCM-SHA512
+  - ECDHE-RSA-AES256-GCM-SHA384
+  - ECDHE-RSA-AES256-SHA384
+
+# Backup specific to web servers
+backup_directories:
+  - /etc/nginx
+  - "{{ application_directory }}"
+  - /var/log/nginx

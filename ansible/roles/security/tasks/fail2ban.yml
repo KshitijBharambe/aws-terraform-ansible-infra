@@ -1,0 +1,158 @@
+---
+# Fail2ban setup tasks
+
+- name: Install fail2ban
+  apt:
+    name: fail2ban
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Create fail2ban configuration directory
+  file:
+    path: /etc/fail2ban
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Configure fail2ban local configuration
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+    backup: yes
+  notify: Restart fail2ban
+
+- name: Create custom fail2ban filters directory
+  file:
+    path: /etc/fail2ban/filter.d
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Configure custom fail2ban filters
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/fail2ban/filter.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - nginx-http-auth.conf
+    - nginx-limit-req.conf
+    - custom-auth.conf
+  when: server_role == "web"
+
+- name: Create fail2ban actions directory
+  file:
+    path: /etc/fail2ban/action.d
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Configure custom fail2ban actions
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/fail2ban/action.d/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - iptables-multiport-log.conf
+    - mail-whois.conf
+  when: security_fail2ban_custom_actions | default(false)
+
+- name: Ensure fail2ban is running and enabled
+  systemd:
+    name: fail2ban
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+
+- name: Create fail2ban log directory
+  file:
+    path: /var/log/fail2ban
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Configure fail2ban log rotation
+  template:
+    src: fail2ban-logrotate.j2
+    dest: /etc/logrotate.d/fail2ban
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create fail2ban status monitoring script
+  template:
+    src: fail2ban-monitor.sh.j2
+    dest: /usr/local/bin/fail2ban-monitor.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Add fail2ban monitoring to cron
+  cron:
+    name: "Fail2ban monitoring"
+    job: "/usr/local/bin/fail2ban-monitor.sh"
+    minute: "*/30"
+    user: root
+    state: present
+  when: security_enable_fail2ban_monitoring | default(false)
+
+- name: Configure fail2ban email notifications
+  lineinfile:
+    path: /etc/fail2ban/jail.local
+    regexp: "^destemail = "
+    line: "destemail = {{ security_fail2ban_email | default('root@localhost') }}"
+    state: present
+  notify: Restart fail2ban
+  when: security_fail2ban_email is defined
+
+- name: Configure fail2ban sender email
+  lineinfile:
+    path: /etc/fail2ban/jail.local
+    regexp: "^sender = "
+    line: "sender = {{ security_fail2ban_sender | default('fail2ban@localhost') }}"
+    state: present
+  notify: Restart fail2ban
+  when: security_fail2ban_sender is defined
+
+- name: Enable fail2ban jails based on server role
+  lineinfile:
+    path: /etc/fail2ban/jail.local
+    regexp: "^{{ item }} = "
+    line: "{{ item }} = true"
+    state: present
+  notify: Restart fail2ban
+  loop: "{{ security_fail2ban_jails }}"
+  when: security_fail2ban_jails is defined
+
+- name: Configure fail2ban ignore IP addresses
+  lineinfile:
+    path: /etc/fail2ban/jail.local
+    regexp: "^ignoreip = "
+    line: "ignoreip = {{ security_fail2ban_ignore_ips | default('127.0.0.1/8') | join(' ') }}"
+    state: present
+  notify: Restart fail2ban
+
+- name: Test fail2ban configuration
+  command: fail2ban-client test
+  register: fail2ban_test
+  changed_when: false
+  failed_when: fail2ban_test.rc != 0
+
+- name: Display fail2ban status
+  command: fail2ban-client status
+  register: fail2ban_status
+  changed_when: false
+
+- name: Show fail2ban jail status
+  debug:
+    msg: "Fail2ban status: {{ fail2ban_status.stdout_lines }}"

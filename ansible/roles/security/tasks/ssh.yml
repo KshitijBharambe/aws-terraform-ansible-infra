@@ -1,0 +1,155 @@
+---
+# SSH hardening tasks
+
+- name: Install OpenSSH server
+  apt:
+    name: openssh-server
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure SSH daemon for security hardening
+  template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+    backup: yes
+  notify: Restart SSH
+  when: ansible_os_family == "Debian"
+
+- name: Ensure SSH service is running and enabled
+  systemd:
+    name: ssh
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+
+- name: Configure SSH log level
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^LogLevel"
+    line: "LogLevel INFO"
+    state: present
+  notify: Restart SSH
+
+- name: Set SSH maximum authentication attempts
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^MaxAuthTries"
+    line: "MaxAuthTries 3"
+    state: present
+  notify: Restart SSH
+
+- name: Set SSH login grace time
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^LoginGraceTime"
+    line: "LoginGraceTime 60"
+    state: present
+  notify: Restart SSH
+
+- name: Disable SSH X11 forwarding
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^X11Forwarding"
+    line: "X11Forwarding no"
+    state: present
+  notify: Restart SSH
+
+- name: Disable SSH tunneling
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^PermitTunnel"
+    line: "PermitTunnel no"
+    state: present
+  notify: Restart SSH
+
+- name: Configure SSH allowed users
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "AllowUsers {{ security_allowed_users | join(' ') }}"
+    state: present
+  notify: Restart SSH
+  when: security_allowed_users is defined
+
+- name: Create SSH banners directory
+  file:
+    path: /etc/ssh/banners
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Configure SSH warning banner
+  template:
+    src: ssh_banner.j2
+    dest: /etc/ssh/banners/issue.net
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart SSH
+
+- name: Enable SSH banner
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^Banner"
+    line: "Banner /etc/ssh/banners/issue.net"
+    state: present
+  notify: Restart SSH
+
+- name: Configure SSH idle timeout
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^ClientAliveInterval"
+    line: "ClientAliveInterval 300"
+    state: present
+  notify: Restart SSH
+
+- name: Configure SSH max sessions
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^MaxSessions"
+    line: "MaxSessions 3"
+    state: present
+  notify: Restart SSH
+
+- name: Configure SSH TCP keep alive
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^TCPKeepAlive"
+    line: "TCPKeepAlive yes"
+    state: present
+  notify: Restart SSH
+
+- name: Disable empty passwords in SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^PermitEmptyPasswords"
+    line: "PermitEmptyPasswords no"
+    state: present
+  notify: Restart SSH
+
+- name: Configure SSH protocol version
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^Protocol"
+    line: "Protocol 2"
+    state: present
+  notify: Restart SSH
+
+- name: Create SSH log directory
+  file:
+    path: /var/log/ssh
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Configure SSH log rotation
+  template:
+    src: ssh-logrotate.j2
+    dest: /etc/logrotate.d/ssh
+    owner: root
+    group: root
+    mode: "0644"

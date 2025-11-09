@@ -1,0 +1,120 @@
+---
+# Firewall configuration tasks
+
+- name: Install UFW (Uncomplicated Firewall)
+  apt:
+    name: ufw
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure UFW default policies
+  ufw:
+    state: "{{ item.state }}"
+    policy: "{{ item.policy }}"
+    direction: "{{ item.direction }}"
+  loop:
+    - { state: enabled, policy: deny, direction: incoming }
+    - { state: enabled, policy: allow, direction: outgoing }
+
+- name: Allow SSH through firewall
+  ufw:
+    rule: allow
+    name: "{{ 'OpenSSH' if security_ssh_port == 22 else 'SSH' }}"
+    port: "{{ security_ssh_port }}"
+    proto: tcp
+
+- name: Allow specific ports through firewall
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop: "{{ firewall_allowed_ports }}"
+  when: firewall_allowed_ports is defined
+
+- name: Allow HTTP and HTTPS through firewall for web servers
+  ufw:
+    rule: allow
+    name: "{{ item.name }}"
+    port: "{{ item.port }}"
+    proto: tcp
+  loop:
+    - { name: "Apache Full", port: "80,443" }
+    - { name: "Nginx Full", port: "80,443" }
+  when: server_role == "web"
+
+- name: Allow application port through firewall
+  ufw:
+    rule: allow
+    port: "{{ app_port | default(8080) }}"
+    proto: tcp
+  when: app_port is defined
+
+- name: Enable UFW logging
+  ufw:
+    logging: "{{ security_firewall_log_level | default('medium') }}"
+
+- name: Enable UFW firewall
+  ufw:
+    state: enabled
+  register: ufw_enable_result
+
+- name: Display UFW status
+  debug:
+    msg: "UFW firewall enabled with status: {{ ufw_enable_result }}"
+
+- name: Create firewall rules backup directory
+  file:
+    path: /etc/ufw/backups
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Backup current firewall rules
+  shell: ufw status verbose > /etc/ufw/backups/rules-$(date +%Y%m%d-%H%M%S).txt
+  args:
+    creates: /etc/ufw/backups/rules-latest.txt
+
+- name: Configure firewall rate limiting
+  ufw:
+    rule: limit
+    port: ssh
+    proto: tcp
+    limit: "6/min"
+
+- name: Allow ICMP ping
+  lineinfile:
+    path: /etc/ufw/before.rules
+    insertbefore: "^# Don't delete these"
+    line: "-A ufw-before-input -p icmp --icmp-type echo-request -j ACCEPT"
+    state: present
+
+- name: Reload UFW to apply ICMP changes
+  ufw:
+    state: reloaded
+
+- name: Create firewall monitoring script
+  template:
+    src: firewall-monitor.sh.j2
+    dest: /usr/local/bin/firewall-monitor.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create firewall log rotation
+  template:
+    src: firewall-logrotate.j2
+    dest: /etc/logrotate.d/ufw
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add firewall monitoring to cron
+  cron:
+    name: "Firewall monitoring"
+    job: "/usr/local/bin/firewall-monitor.sh"
+    minute: "0"
+    hour: "*/6"
+    user: root
+    state: present
+  when: security_enable_firewall_monitoring | default(false)

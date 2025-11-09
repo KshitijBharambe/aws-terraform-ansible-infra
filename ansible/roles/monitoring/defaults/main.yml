@@ -1,0 +1,122 @@
+---
+# Monitoring role default variables
+
+# CloudWatch settings
+monitoring_enable_cloudwatch: true
+monitoring_aws_region: us-east-1
+monitoring_namespace: "MyApp"
+monitoring_metrics_collection_interval: 60
+monitoring_log_retention_days: 7
+
+# CloudWatch alarms
+monitoring_enable_cloudwatch_alarms: false
+monitoring_cpu_threshold: 80
+monitoring_memory_threshold: 85
+monitoring_disk_threshold: 90
+monitoring_alarm_email: false
+
+# System monitoring
+monitoring_enable_system_monitoring: true
+monitoring_enable_prometheus: false
+monitoring_enable_grafana: false
+monitoring_enable_dashboard: false
+
+# Log monitoring
+monitoring_enable_log_monitoring: true
+monitoring_log_groups:
+  - /var/log/syslog
+  - /var/log/auth.log
+  - /var/log/nginx
+monitoring_custom_log_patterns: []
+
+# Custom metrics
+monitoring_custom_metrics: []
+monitoring_enable_custom_metrics: false
+
+# Performance monitoring
+monitoring_enable_performance_monitoring: true
+monitoring_collect_detailed_metrics: false
+monitoring_enable_process_monitoring: true
+
+# Network monitoring
+monitoring_enable_network_monitoring: true
+monitoring_network_interfaces: ["eth0", "ens5", "ens192"]
+monitoring_collect_network_stats: true
+
+# Disk monitoring
+monitoring_enable_disk_monitoring: true
+monitoring_disk_paths:
+  - /
+  - /var
+  - /home
+  - /opt
+monitoring_disk_warning_threshold: 80
+monitoring_disk_critical_threshold: 90
+
+# Memory monitoring
+monitoring_enable_memory_monitoring: true
+monitoring_memory_warning_threshold: 75
+monitoring_memory_critical_threshold: 90
+
+# CPU monitoring
+monitoring_enable_cpu_monitoring: true
+monitoring_cpu_warning_threshold: 70
+monitoring_cpu_critical_threshold: 85
+
+# Service monitoring
+monitoring_enable_service_monitoring: true
+monitoring_critical_services:
+  - ssh
+  - ufw
+  - nginx
+  - apache2
+
+# Health checks
+monitoring_enable_health_checks: true
+monitoring_health_check_interval: 300
+monitoring_health_check_timeout: 10
+
+# Alerting and notifications
+monitoring_enable_alerts: false
+monitoring_alert_webhook: false
+monitoring_alert_email: false
+monitoring_alert_slack: false
+monitoring_alert_discord: false
+
+# Reporting
+monitoring_enable_reports: false
+monitoring_report_frequency: daily
+monitoring_report_retention: 30
+
+# Integration settings
+monitoring_enable_aws_integration: false
+monitoring_enable_azure_integration: false
+monitoring_enable_gcp_integration: false
+
+# Advanced monitoring
+monitoring_enable_distributed_tracing: false
+monitoring_enable_application_performance_monitoring: false
+monitoring_enable_real_user_monitoring: false
+
+# Backup and retention
+monitoring_enable_backup: false
+monitoring_backup_retention_days: 90
+monitoring_backup_compress: true
+
+# Security monitoring
+monitoring_enable_security_monitoring: false
+monitoring_enable_intrusion_detection: false
+monitoring_enable_file_integrity_monitoring: false
+
+# API monitoring
+monitoring_enable_api_monitoring: false
+monitoring_api_endpoints: []
+monitoring_api_timeout: 30
+
+# Custom scripts
+monitoring_enable_custom_scripts: false
+monitoring_custom_script_paths: []
+
+# Experimental features
+monitoring_enable_experimental_features: false
+monitoring_enable_beta_features: false

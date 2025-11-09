@@ -1,0 +1,169 @@
+---
+# Monitoring role - main tasks
+
+- name: Include CloudWatch agent tasks
+  include_tasks: cloudwatch.yml
+  tags: monitoring,cloudwatch
+  when: monitoring_enable_cloudwatch | default(true)
+
+- name: Include system monitoring tasks
+  include_tasks: system.yml
+  tags: monitoring,system
+
+- name: Include log configuration tasks
+  include_tasks: logging.yml
+  tags: monitoring,logging
+
+- name: Include custom metrics tasks
+  include_tasks: custom-metrics.yml
+  tags: monitoring,metrics
+  when: monitoring_custom_metrics is defined
+
+- name: Create monitoring directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - /opt/monitoring
+    - /var/log/monitoring
+    - /etc/monitoring
+    - /usr/local/bin/monitoring
+
+- name: Install monitoring packages
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - htop
+    - iotop
+    - nethogs
+    - sysstat
+    - lm-sensors
+    - curl
+    - jq
+    - ncdu
+  when: ansible_os_family == "Debian"
+
+- name: Configure system performance monitoring
+  template:
+    src: sysstat.j2
+    dest: /etc/default/sysstat
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart sysstat
+  when: ansible_os_family == "Debian"
+
+- name: Enable sysstat collection
+  systemd:
+    name: sysstat
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+
+- name: Create monitoring scripts
+  template:
+    src: "{{ item }}.j2"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - system-health-check.sh
+    - disk-usage-monitor.sh
+    - memory-monitor.sh
+    - process-monitor.sh
+
+- name: Add monitoring scripts to cron
+  cron:
+    name: "{{ item.name }}"
+    job: "/usr/local/bin/{{ item.script }}"
+    minute: "{{ item.minute | default('*/5') }}"
+    hour: "{{ item.hour | default('*') }}"
+    day: "{{ item.day | default('*') }}"
+    month: "{{ item.month | default('*') }}"
+    weekday: "{{ item.weekday | default('*') }}"
+    user: root
+    state: present
+  loop:
+    - {
+        name: "System Health Check",
+        script: "system-health-check.sh",
+        minute: "*/10",
+      }
+    - {
+        name: "Disk Usage Monitor",
+        script: "disk-usage-monitor.sh",
+        minute: "*/30",
+      }
+    - { name: "Memory Monitor", script: "memory-monitor.sh", minute: "*/15" }
+    - { name: "Process Monitor", script: "process-monitor.sh", minute: "*/20" }
+
+- name: Create log rotation for monitoring logs
+  template:
+    src: monitoring-logrotate.j2
+    dest: /etc/logrotate.d/monitoring
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure monitoring alerts
+  template:
+    src: monitoring-alerts.j2
+    dest: /etc/monitoring/alerts.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: monitoring_enable_alerts | default(false)
+
+- name: Install Prometheus node exporter (optional)
+  apt:
+    name: prometheus-node-exporter
+    state: present
+  when: monitoring_enable_prometheus | default(false)
+
+- name: Enable Prometheus node exporter
+  systemd:
+    name: prometheus-node-exporter
+    state: started
+    enabled: yes
+  when: monitoring_enable_prometheus | default(false)
+
+- name: Configure Grafana agent (optional)
+  template:
+    src: grafana-agent.yaml.j2
+    dest: /etc/grafana-agent.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: monitoring_enable_grafana | default(false)
+  notify: Restart grafana-agent
+
+- name: Enable Grafana agent
+  systemd:
+    name: grafana-agent
+    state: started
+    enabled: yes
+  when: monitoring_enable_grafana | default(false)
+
+- name: Create monitoring dashboard configuration
+  template:
+    src: dashboard-config.j2
+    dest: /etc/monitoring/dashboard.json
+    owner: root
+    group: root
+    mode: "0644"
+  when: monitoring_enable_dashboard | default(false)
+
+- name: Test monitoring configuration
+  command: /usr/local/bin/system-health-check.sh
+  register: monitoring_test
+  changed_when: false
+
+- name: Display monitoring status
+  debug:
+    msg: "Monitoring configuration test: {{ monitoring_test.stdout }}"

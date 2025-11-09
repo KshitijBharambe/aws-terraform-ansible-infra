@@ -1,0 +1,125 @@
+# Fail2ban configuration
+# This file is managed by Ansible - DO NOT EDIT MANUALLY
+
+[DEFAULT]
+# Ban offenders for specified time
+bantime = {{ security_fail2ban_ban_time | default(600) }}
+
+# Find a host which is banned for at least the specified time
+findtime = 600
+
+# Number of failures before banning
+maxretry = {{ security_fail2ban_max_retry | default(5) }}
+
+# Backend to use
+backend = auto
+
+# Email configuration
+{% if security_fail2ban_email is defined %}
+destemail = {{ security_fail2ban_email }}
+{% else %}
+destemail = root@localhost
+{% endif %}
+
+{% if security_fail2ban_sender is defined %}
+sender = {{ security_fail2ban_sender }}
+{% else %}
+sender = fail2ban@localhost
+{% endif %}
+
+# Action configuration
+action = %(action_mwl)s
+
+# MTAs for sending mail
+mta = sendmail
+
+# Protocol to use
+protocol = tcp
+
+# Chain to use for actions
+chain = INPUT
+
+# Ignore IP addresses
+ignoreip = {{ security_fail2ban_ignore_ips | default('127.0.0.1/8 ::1') | join(' ') }}
+
+# SSH jail
+[sshd]
+enabled = true
+port = {{ security_ssh_port | default(22) }}
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = {{ security_fail2ban_max_retry | default(5) }}
+bantime = {{ security_fail2ban_ban_time | default(600) }}
+
+# SSH with additional logging
+[sshd-ddos]
+enabled = true
+port = {{ security_ssh_port | default(22) }}
+filter = sshd-ddos
+logpath = /var/log/auth.log
+maxretry = 6
+bantime = {{ security_fail2ban_ban_time * 2 | default(1200) }}
+
+# Web server jails (enabled for web servers)
+{% if server_role == "web" %}
+[nginx-http-auth]
+enabled = true
+port = http,https
+filter = nginx-http-auth
+logpath = /var/log/nginx/error.log
+maxretry = 6
+bantime = {{ security_fail2ban_ban_time | default(600) }}
+
+[nginx-limit-req]
+enabled = true
+port = http,https
+filter = nginx-limit-req
+logpath = /var/log/nginx/error.log
+maxretry = 10
+bantime = {{ security_fail2ban_ban_time | default(600) }}
+
+[apache-auth]
+enabled = true
+port = http,https
+filter = apache-auth
+logpath = /var/log/apache2/error.log
+maxretry = 6
+bantime = {{ security_fail2ban_ban_time | default(600) }}
+
+[apache-badbots]
+enabled = true
+port = http,https
+filter = apache-badbots
+logpath = /var/log/apache2/access.log
+bantime = 86400
+maxretry = 1
+{% endif %}
+
+# Additional jails based on configuration
+{% for jail in security_fail2ban_jails | default([]) %}
+{% if jail not in ['sshd', 'sshd-ddos', 'nginx-http-auth', 'nginx-limit-req', 'apache-auth', 'apache-badbots'] %}
+[{{ jail }}]
+enabled = true
+{% endif %}
+{% endfor %}
+
+# Custom application jail
+{% if app_name is defined %}
+[{{ app_name }}-auth]
+enabled = true
+port = {{ app_port | default(8080) }}
+filter = {{ app_name }}-auth
+logpath = /var/log/{{ app_name }}/auth.log
+maxretry = 5
+bantime = {{ security_fail2ban_ban_time | default(600) }}
+{% endif %}
+
+# Recidive jail for repeat offenders
+[recidive]
+enabled = true
+filter = recidive
+logpath = /var/log/fail2ban.log
+action = %(action_mw)s
+bantime = 86400
+findtime = 86400
+maxretry = 5

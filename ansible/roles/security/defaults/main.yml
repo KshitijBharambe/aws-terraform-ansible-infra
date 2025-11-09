@@ -1,0 +1,93 @@
+---
+# Security role default variables
+
+# SSH settings
+security_ssh_port: 22
+security_allowed_users:
+  - ubuntu
+  - admin
+security_denied_users: []
+
+# Fail2ban settings
+security_fail2ban_enabled: true
+security_fail2ban_ban_time: 600
+security_fail2ban_max_retry: 5
+security_fail2ban_ignore_ips:
+  - "127.0.0.1/8"
+  - "::1"
+security_fail2ban_jails:
+  - sshd
+security_fail2ban_email: false
+security_fail2ban_sender: false
+security_fail2ban_custom_actions: false
+security_fail2ban_monitoring: false
+
+# Firewall settings
+security_firewall_log_level: medium
+security_enable_firewall_monitoring: false
+firewall_allowed_ports:
+  - port: 22
+    proto: tcp
+
+# Audit settings
+security_enable_audit_monitoring: false
+security_enable_audit_reports: false
+security_enable_aide: false
+security_disable_usb: false
+
+# Additional security features
+security_kernel_params_updated: false
+security_systemd_updated: false
+
+# Password policies
+security_min_password_length: 12
+security_password_complexity: true
+
+# File integrity
+security_enable_file_integrity: false
+security_critical_files:
+  - /etc/passwd
+  - /etc/shadow
+  - /etc/group
+  - /etc/gshadow
+  - /etc/ssh/sshd_config
+
+# System hardening
+security_disable_unused_services: true
+security_remove_unused_packages: true
+security_configure_automatic_updates: true
+
+# Logging settings
+security_enable_centralized_logging: false
+security_log_retention_days: 30
+security_enable_log_monitoring: false
+
+# Network security
+security_disable_ipv6: false
+security_enable_tcp_hardening: true
+security_enable_ip_forwarding_protection: true
+
+# Application security
+security_enable_apparmor: true
+security_enable_selinux: false # Default to AppArmor on Ubuntu
+security_configure_apparmor_profiles: false
+
+# Monitoring and alerting
+security_enable_intrusion_detection: false
+security_enable_rootkit_detection: false
+security_enable_filesystem_monitoring: false
+
+# Backup and recovery
+security_enable_config_backups: true
+security_config_backup_retention: 7
+security_enable_offsite_backups: false
+
+# Compliance settings
+security_cis_level: 1
+security_enable_cis_compliance: false
+security_audit_frequency: daily
+
+# Custom security policies
+security_custom_rules: []
+security_custom_filters: []
+security_custom_jails: []

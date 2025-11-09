@@ -1,0 +1,90 @@
+---
+# Web server role default variables
+
+# Web server type and configuration
+webserver_type: nginx
+webserver_port: 80
+webserver_ssl_port: 443
+webserver_server_name: "{{ common_domain | default('example.com') }}"
+
+# Package mappings for different web servers
+webserver_packages:
+  nginx:
+    - nginx
+    - nginx-extras
+  apache:
+    - apache2
+    - apache2-utils
+
+# SSL configuration
+webserver_ssl_enabled: false
+webserver_ssl_protocols:
+  - TLSv1.2
+  - TLSv1.3
+webserver_ssl_ciphers:
+  - ECDHE-RSA-AES256-GCM-SHA384
+  - ECDHE-RSA-AES128-GCM-SHA256
+  - ECDHE-RSA-AES256-SHA384
+
+# Performance settings
+webserver_worker_processes: auto
+webserver_worker_connections: 1024
+webserver_keepalive_timeout: 65
+webserver_client_max_body_size: 10M
+
+# SSL certificate information
+ssl_country: US
+ssl_state: CA
+ssl_city: San Francisco
+ssl_organization: Example Org
+ssl_organizational_unit: IT
+ssl_email: webmaster@example.com
+
+# Monitoring and performance
+webserver_enable_tuning: false
+webserver_enable_monitoring: true
+webserver_enable_status_page: true
+
+# Security settings
+webserver_security_headers: true
+webserver_hide_server_tokens: true
+webserver_limit_requests: true
+webserver_rate_limit: 10
+webserver_rate_window: 1m
+
+# Logging settings
+webserver_log_format: combined
+webserver_log_level: warn
+webserver_access_log: /var/log/{{ webserver_type }}/access.log
+webserver_error_log: /var/log/{{ webserver_type }}/error.log
+
+# Cache settings
+webserver_enable_cache: false
+webserver_cache_path: /var/cache/{{ webserver_type }}
+webserver_cache_duration: 1h
+
+# Compression settings
+webserver_enable_compression: true
+webserver_compression_level: 6
+webserver_compressible_types:
+  - text/plain
+  - text/css
+  - text/xml
+  - text/javascript
+  - application/javascript
+  - application/xml+rss
+  - application/json
+
+# Directory settings
+webserver_root: /var/www
+webserver_user: "{{ app_name | default('www-data') }}"
+webserver_group: "{{ app_name | default('www-data') }}"
+
+# Virtual hosting
+webserver_enable_virtual_hosts: true
+webserver_default_site: true
+
+# Maintenance and monitoring
+webserver_maintenance_page: false
+webserver_health_check: true
+webserver_status_endpoint: /nginx_status

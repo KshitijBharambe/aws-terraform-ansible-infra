@@ -1,0 +1,21 @@
+---
+# Common role handlers
+
+- name: Restart chrony
+  systemd:
+    name: chrony
+    state: restarted
+  when: ansible_os_family == "Debian"
+
+- name: Update timezone
+  command: timedatectl set-timezone {{ common_timezone }}
+  changed_when: false
+  when: common_timezone is defined
+
+- name: Reload hostname
+  command: hostname {{ inventory_hostname }}
+  changed_when: false
+
+- name: Update hosts file
+  command: hostnamectl set-hostname {{ inventory_hostname }}
+  changed_when: false

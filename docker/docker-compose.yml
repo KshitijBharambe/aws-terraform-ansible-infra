@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  localstack:
+    container_name: localstack-main
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      # Core LocalStack Configuration
+      - SERVICES=s3,ec2,iam,cloudwatch,logs,sns,dynamodb,cloudformation,sts,elasticloadbalancing,autoscaling,secretsmanager,kms
+      - DEBUG=1
+      - PERSISTENCE=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      
+      # AWS Configuration
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      
+      # Data directory - FIXED PATH
+      - DATA_DIR=/var/lib/localstack
+      
+    volumes:
+      # Mount docker socket for Lambda
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      # Persist data - using named volume instead of bind mount
+      - localstack-data:/var/lib/localstack
+      # Initialization scripts (optional - comment out if causing issues)
+      # - "./localstack-init.sh:/etc/localstack/init/ready.d/init.sh"
+    
+    networks:
+      - localstack-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  localstack-network:
+    driver: bridge
+
+volumes:
+  localstack-data:
+    driver: local

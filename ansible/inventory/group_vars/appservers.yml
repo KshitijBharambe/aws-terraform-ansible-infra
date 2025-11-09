@@ -1,0 +1,52 @@
+---
+# App server specific variables
+
+# Server role
+server_role: app
+
+# Firewall settings for app servers
+firewall_allowed_ports:
+  - port: 22
+    proto: tcp
+  - port: "{{ app_port }}"
+    proto: tcp
+
+# Security settings
+security_fail2ban_enabled: true
+security_fail2ban_jails:
+  - sshd
+
+# Monitoring specific to app servers
+monitoring_custom_metrics:
+  - name: app_memory_usage
+    pattern: "app.*memory"
+  - name: app_cpu_usage
+    pattern: "app.*cpu"
+  - name: app_response_time
+    pattern: "app.*response_time"
+
+# Application specific settings
+app_java_options: "-Xmx512m -Xms256m"
+app_log_level: INFO
+app_log_directory: /var/log/{{ app_name }}
+
+# Process monitoring
+monitor_app_processes: true
+app_health_check_endpoint: "/health"
+app_health_check_interval: 30
+
+# Database connection (if applicable)
+app_database_host: "{{ vault_db_host | default(omit) }}"
+app_database_port: 5432
+app_database_name: "{{ vault_db_name | default(omit) }}"
+
+# Backup specific to app servers
+backup_directories:
+  - "{{ application_directory }}"
+  - "{{ app_log_directory }}"
+  - /etc/{{ app_name }}
+
+# Performance tuning
+app_max_connections: 100
+app_connection_timeout: 30
+app_read_timeout: 60

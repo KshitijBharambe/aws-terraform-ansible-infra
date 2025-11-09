@@ -1,0 +1,177 @@
+---
+# Audit logging tasks
+
+- name: Install auditd
+  apt:
+    name: auditd
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure audit daemon
+  template:
+    src: auditd.conf.j2
+    dest: /etc/audit/auditd.conf
+    owner: root
+    group: root
+    mode: "0640"
+    backup: yes
+  notify: Restart auditd
+
+- name: Configure audit rules
+  template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/audit.rules
+    owner: root
+    group: root
+    mode: "0640"
+    backup: yes
+  notify: Restart auditd
+
+- name: Create audit log directory
+  file:
+    path: /var/log/audit
+    state: directory
+    mode: "0750"
+    owner: root
+    group: root
+
+- name: Ensure auditd is running and enabled
+  systemd:
+    name: auditd
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+
+- name: Configure audit log rotation
+  template:
+    src: auditd-logrotate.j2
+    dest: /etc/logrotate.d/auditd
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create audit monitoring script
+  template:
+    src: audit-monitor.sh.j2
+    dest: /usr/local/bin/audit-monitor.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Add audit monitoring to cron
+  cron:
+    name: "Audit monitoring"
+    job: "/usr/local/bin/audit-monitor.sh"
+    minute: "0"
+    hour: "*/4"
+    user: root
+    state: present
+  when: security_enable_audit_monitoring | default(false)
+
+- name: Install aureport for audit reporting
+  apt:
+    name: audit-report
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Configure audit report generation
+  template:
+    src: audit-report.sh.j2
+    dest: /usr/local/bin/audit-report.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Schedule daily audit reports
+  cron:
+    name: "Daily audit report"
+    job: "/usr/local/bin/audit-report.sh"
+    minute: "0"
+    hour: "6"
+    user: root
+    state: present
+  when: security_enable_audit_reports | default(false)
+
+- name: Configure audit rules for file system changes
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    state: present
+    create: yes
+  loop:
+    - "-a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=-1 -F key=perm_mod"
+    - "-a always,exit -F arch=b64 -S chown -S fchown -S fchownat -S lchown -F auid>=1000 -F auid!=-1 -F key=perm_mod"
+    - "-a always,exit -F arch=b64 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=-1 -F key=perm_mod"
+    - "-a always,exit -F arch=b64 -S rename -S renameat -S renameat2 -F auid>=1000 -F auid!=-1 -F key=rename"
+  notify: Restart auditd
+
+- name: Configure audit rules for user/group modifications
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "-w /etc/group -p wa -k identity"
+    - "-w /etc/passwd -p wa -k identity"
+    - "-w /etc/gshadow -p wa -k identity"
+    - "-w /etc/shadow -p wa -k identity"
+    - "-w /etc/sudoers -p wa -k sudoers"
+  notify: Restart auditd
+
+- name: Configure audit rules for network configuration
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "-w /etc/hosts -p wa -k hosts"
+    - "-w /etc/sysconfig/network -p wa -k network"
+    - "-w /etc/network/ -p wa -k network"
+  notify: Restart auditd
+
+- name: Configure audit rules for system calls
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "-a always,exit -F arch=b64 -S execve -F auid>=1000 -F auid!=4294967295 -k exec"
+    - "-a always,exit -F arch=b64 -S connect -F auid>=1000 -F auid!=-1 -k network"
+    - "-a always,exit -F arch=b64 -S bind -F auid>=1000 -F auid!=-1 -k network"
+  notify: Restart auditd
+
+- name: Configure audit rules for sensitive directories
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "-w /root -p wa -k root_files"
+    - "-w /home -p wa -k home_files"
+    - "-w /var/www -p wa -k web_files"
+    - "-w /etc/ssh -p wa -k sshd_config"
+    - "-w /var/log -p wa -k log_files"
+  notify: Restart auditd
+
+- name: Configure audit rules for login tracking
+  lineinfile:
+    path: /etc/audit/rules.d/audit.rules
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "-w /var/log/lastlog -p wa -k logins"
+    - "-w /var/log/faillog -p wa -k logins"
+    - "-w /var/run/faillock -p wa -k logins"
+    - "-w /var/run/utmp -p wa -k logins"
+  notify: Restart auditd
+
+- name: Test audit configuration
+  command: augenrules --check
+  register: audit_check
+  changed_when: false
+  failed_when: audit_check.rc != 0
+
+- name: Reload audit rules
+  command: service auditd reload
+  when: audit_check.rc == 0
+  notify: Restart auditd

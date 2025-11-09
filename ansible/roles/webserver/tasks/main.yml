@@ -1,0 +1,228 @@
+---
+# Web server role - main tasks
+
+- name: Install web server packages
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop: "{{ webserver_packages[webserver_type] }}"
+  when: ansible_os_family == "Debian"
+
+- name: Create web server directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - /var/www
+    - /etc/{{ webserver_type }}
+    - /var/log/{{ webserver_type }}
+    - /etc/ssl/certs
+    - /var/cache/{{ webserver_type }}
+
+- name: Configure web server main configuration
+  template:
+    src: "{{ webserver_type }}.conf.j2"
+    dest: "/etc/{{ webserver_type }}/{{ webserver_type }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: yes
+  notify: Restart {{ webserver_type }}
+  when: webserver_type is defined
+
+- name: Create web server sites configuration
+  template:
+    src: "{{ webserver_type }}-site.conf.j2"
+    dest: "/etc/{{ webserver_type }}/sites-available/{{ webserver_server_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: webserver_server_name is defined
+
+- name: Enable web server site
+  file:
+    src: "/etc/{{ webserver_type }}/sites-available/{{ webserver_server_name }}"
+    dest: "/etc/{{ webserver_type }}/sites-enabled/{{ webserver_server_name }}"
+    state: link
+  notify: Restart {{ webserver_type }}
+  when: webserver_server_name is defined
+
+- name: Remove default web server site
+  file:
+    path: "/etc/{{ webserver_type }}/sites-enabled/default"
+    state: absent
+  notify: Restart {{ webserver_type }}
+  when: webserver_type is defined
+
+- name: Create application directory
+  file:
+    path: "{{ application_directory }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ app_name | default('www-data') }}"
+    group: "{{ app_name | default('www-data') }}"
+  when: application_directory is defined
+
+- name: Deploy sample application
+  template:
+    src: sample-app.html.j2
+    dest: "{{ application_directory }}/index.html"
+    owner: "{{ app_name | default('www-data') }}"
+    group: "{{ app_name | default('www-data') }}"
+    mode: "0644"
+  when: application_directory is defined
+
+- name: Create health check endpoint
+  template:
+    src: health-check.j2
+    dest: "{{ application_directory }}/health"
+    owner: "{{ app_name | default('www-data') }}"
+    group: "{{ app_name | default('www-data') }}"
+    mode: "0644"
+  when: application_directory is defined
+
+- name: Configure SSL (if enabled)
+  template:
+    src: ssl-{{ webserver_type }}.conf.j2
+    dest: "/etc/{{ webserver_type }}/ssl.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart {{ webserver_type }}
+  when:
+    - webserver_ssl_enabled | default(false)
+    - webserver_type is defined
+
+- name: Generate self-signed SSL certificate (if needed)
+  command: >
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048
+    -keyout /etc/ssl/certs/{{ webserver_server_name }}.key
+    -out /etc/ssl/certs/{{ webserver_server_name }}.crt
+    -subj "/C={{ ssl_country | default('US') }}/ST={{ ssl_state | default('CA') }}/L={{ ssl_city | default('San Francisco') }}/O={{ ssl_organization | default('Example Org') }}/OU={{ ssl_organizational_unit | default('IT') }}/CN={{ webserver_server_name }}"
+  args:
+    creates: "/etc/ssl/certs/{{ webserver_server_name }}.crt"
+  when:
+    - webserver_ssl_enabled | default(false)
+    - webserver_server_name is defined
+    - not ansible_check_mode | default(false)
+
+- name: Set SSL certificate permissions
+  file:
+    path: "{{ item }}"
+    mode: "0600"
+    owner: root
+    group: root
+  loop:
+    - "/etc/ssl/certs/{{ webserver_server_name }}.key"
+    - "/etc/ssl/certs/{{ webserver_server_name }}.crt"
+  when:
+    - webserver_ssl_enabled | default(false)
+    - webserver_server_name is defined
+
+- name: Configure log rotation for web server logs
+  template:
+    src: webserver-logrotate.j2
+    dest: /etc/logrotate.d/{{ webserver_type }}
+    owner: root
+    group: root
+    mode: "0644"
+  when: webserver_type is defined
+
+- name: Create web server monitoring script
+  template:
+    src: webserver-monitor.sh.j2
+    dest: /usr/local/bin/webserver-monitor.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: webserver_type is defined
+
+- name: Schedule web server monitoring
+  cron:
+    name: "Web Server Monitoring"
+    job: "/usr/local/bin/webserver-monitor.sh"
+    minute: "*/5"
+    hour: "*"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: webserver_type is defined
+
+- name: Ensure web server is running and enabled
+  systemd:
+    name: "{{ webserver_type }}"
+    state: started
+    enabled: yes
+  when: webserver_type is defined
+
+- name: Open firewall ports for web server
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ webserver_port | default(80) }}"
+    - "{{ webserver_ssl_port | default(443) }}"
+  when:
+    - webserver_type is defined
+    - ansible_os_family == "Debian"
+
+- name: Test web server configuration
+  uri:
+    url: "http://localhost:{{ webserver_port | default(80) }}"
+    method: GET
+    status_code: [200, 404] # 404 is OK if no index file
+  register: webserver_test
+  ignore_errors: yes
+  when: webserver_type is defined
+
+- name: Test SSL configuration (if enabled)
+  uri:
+    url: "https://localhost:{{ webserver_ssl_port | default(443) }}"
+    method: GET
+    validate_certs: no
+    status_code: [200, 404]
+  register: webserver_ssl_test
+  ignore_errors: yes
+  when:
+    - webserver_ssl_enabled | default(false)
+    - webserver_type is defined
+
+- name: Display web server status
+  debug:
+    msg: |
+      Web server: {{ webserver_type | default('unknown') }}
+      HTTP port: {{ webserver_port | default(80) }}
+      HTTPS port: {{ webserver_ssl_port | default(443) }}
+      SSL enabled: {{ webserver_ssl_enabled | default(false) }}
+      Configuration test: {{ 'PASSED' if webserver_test.status == 200 else 'FAILED' }}
+      SSL test: {{ 'PASSED' if webserver_ssl_test.status == 200 else 'N/A' }}
+  when: webserver_type is defined
+
+- name: Create web server performance tuning script
+  template:
+    src: webserver-tuning.sh.j2
+    dest: /usr/local/bin/webserver-tuning.sh
+    mode: "0755"
+    owner: root
+    group: root
+  when: webserver_enable_tuning | default(false)
+
+- name: Schedule web server performance tuning
+  cron:
+    name: "Web Server Tuning"
+    job: "/usr/local/bin/webserver-tuning.sh"
+    minute: "0"
+    hour: "*/6"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    state: present
+  when: webserver_enable_tuning | default(false)
