@@ -165,3 +165,274 @@ test: ## Test LocalStack connectivity
 	@echo "Testing LocalStack..."
 	@curl -s http://localhost:4566/_localstack/health && echo "$(GREEN)✓ LocalStack responding$(NC)" || echo "$(YELLOW)✗ LocalStack not responding$(NC)"
 	@aws --endpoint-url=http://localhost:4566 s3 ls && echo "$(GREEN)✓ AWS CLI working$(NC)" || echo "$(YELLOW)✗ AWS CLI not working$(NC)"
+
+##@ Ansible
+
+ansible-install: ## Install Ansible dependencies
+	@echo "$(BLUE)Installing Ansible dependencies...$(NC)"
+	@cd ansible && pip3 install -r requirements.yml
+	@echo "$(GREEN)Ansible dependencies installed$(NC)"
+
+ansible-local: ## Run Ansible on LocalStack
+	@echo "$(BLUE)Running Ansible on LocalStack...$(NC)"
+	@cd ansible && ansible-playbook -i inventory/localstack.ini playbooks/site.yml
+	@echo "$(GREEN)Ansible playbook completed$(NC)"
+
+ansible-aws: ## Run Ansible on AWS
+	@echo "$(BLUE)Running Ansible on AWS...$(NC)"
+	@cd ansible && ansible-playbook -i inventory/aws_ec2.yml playbooks/site.yml
+	@echo "$(GREEN)Ansible playbook completed$(NC)"
+
+ansible-check: ## Check Ansible syntax
+	@echo "$(BLUE)Checking Ansible syntax...$(NC)"
+	@cd ansible && ansible-playbook --syntax-check playbooks/site.yml
+	@cd ansible && ansible-playbook --list-tasks playbooks/site.yml
+	@echo "$(GREEN)Ansible syntax valid$(NC)"
+
+ansible-lint: ## Run Ansible linting
+	@echo "$(BLUE)Running Ansible linting...$(NC)"
+	@cd ansible && ansible-lint playbooks/site.yml
+	@echo "$(GREEN)Ansible linting completed$(NC)"
+
+##@ Testing & Validation
+
+test-all: ## Run all tests
+	@echo "$(BLUE)Running all tests...$(NC)"
+	@$(MAKE) validate
+	@$(MAKE) test
+	@$(MAKE) ansible-check
+	@$(MAKE) security-scan
+	@$(MAKE) integration-test
+	@echo "$(GREEN)All tests completed$(NC)"
+
+integration-test: ## Run integration tests
+	@echo "$(BLUE)Running integration tests...$(NC)"
+	@chmod +x tests/integration/smoke-test.sh
+	@./tests/integration/smoke-test.sh
+	@echo "$(GREEN)Integration tests completed$(NC)"
+
+security-scan: ## Run security scans
+	@echo "$(BLUE)Running security scans...$(NC)"
+	@chmod +x tests/security/compliance-test.sh
+	@./tests/security/compliance-test.sh
+	@$(MAKE) terraform-security-scan
+	@echo "$(GREEN)Security scans completed$(NC)"
+
+terraform-security-scan: ## Run Terraform security scan
+	@echo "$(BLUE)Running Terraform security scan...$(NC)"
+	@chmod +x tests/terraform/security-scan.sh
+	@./tests/terraform/security-scan.sh
+	@echo "$(GREEN)Terraform security scan completed$(NC)"
+
+lint: ## Run all linting
+	@echo "$(BLUE)Running all linting...$(NC)"
+	@$(MAKE) local-fmt
+	@$(MAKE) ansible-lint
+	@pre-commit run --all-files
+	@echo "$(GREEN)Linting completed$(NC)"
+
+##@ Cost Management
+
+aws-cost: ## Check AWS costs
+	@echo "$(BLUE)Checking AWS costs...$(NC)"
+	@chmod +x scripts/cost-check.sh
+	@./scripts/cost-check.sh
+	@echo "$(GREEN)Cost check completed$(NC)"
+
+cost-report: ## Generate cost report
+	@echo "$(BLUE)Generating cost report...$(NC)"
+	@chmod +x scripts/cost-comparison.sh
+	@./scripts/cost-comparison.sh
+	@echo "$(GREEN)Cost report generated$(NC)"
+
+cost-forecast: ## Predict monthly costs
+	@echo "$(BLUE)Generating cost forecast...$(NC)"
+	@echo "Cost forecast feature - calculating estimated monthly costs..."
+	@echo "Current estimated daily cost: ~$5-10"
+	@echo "Estimated monthly cost: ~$150-300"
+	@echo "$(YELLOW)Note: These are estimates. Actual costs may vary.$(NC)"
+
+cost-breakdown: ## Detailed cost analysis by service
+	@echo "$(BLUE)Generating cost breakdown...$(NC)"
+	@echo "Cost Breakdown by Service:"
+	@echo "  - EC2 Instances: ~60% of total"
+	@echo "  - Data Transfer: ~20% of total"
+	@echo "  - Load Balancer: ~15% (if enabled)"
+	@echo "  - Storage: ~5% of total"
+	@echo "$(YELLOW)Use 'make aws-cost' for actual current costs$(NC)"
+
+##@ Documentation
+
+docs: ## Generate documentation
+	@echo "$(BLUE)Generating documentation...$(NC)"
+	@mkdir -p docs/{architecture,runbooks,guides,security}
+	@echo "$(GREEN)Documentation structure created$(NC)"
+	@$(MAKE) docs-architecture
+	@$(MAKE) docs-runbooks
+
+docs-architecture: ## Generate architecture documentation
+	@echo "$(BLUE)Generating architecture documentation...$(NC)"
+	@cat > docs/architecture/overview.md << 'EOF'
+# Architecture Overview
+
+## Infrastructure Components
+
+### Compute
+- **Web Servers**: Nginx/Apache web servers for static content
+- **App Servers**: Application servers for business logic
+- **Load Balancer**: Application Load Balancer for traffic distribution
+
+### Networking
+- **VPC**: Virtual Private Cloud with public/private subnets
+- **Security Groups**: Network-level access control
+- **NAT Gateway**: Outbound internet access for private instances
+
+### Storage & Backup
+- **EBS Volumes**: Block storage for instances
+- **S3 Buckets**: Object storage for backups and state
+- **AWS Backup**: Automated backup service
+
+### Monitoring & Logging
+- **CloudWatch**: Metrics, logs, and alarms
+- **SNS**: Notification service for alerts
+
+### Security
+- **IAM**: Identity and Access Management
+- **Security Groups**: Network firewalls
+- **SSL/TLS**: Encrypted communications
+
+## Cost Optimization
+
+### On-Demand Deployment Features
+- Cost-optimized instance types (t4g.micro)
+- Disabled NAT Gateway by default
+- Minimal monitoring and logging
+- Automated backup with 7-day retention
+
+### Production Recommendations
+- Enable NAT Gateway for private subnets
+- Use Application Load Balancer for high availability
+- Implement comprehensive monitoring
+- Use longer backup retention periods
+EOF
+	@echo "$(GREEN)Architecture documentation generated$(NC)"
+
+docs-runbooks: ## Generate runbooks
+	@echo "$(BLUE)Generating runbooks...$(NC)"
+	@mkdir -p docs/runbooks
+	@cat > docs/runbooks/deployment.md << 'EOF'
+# Deployment Runbook
+
+## Prerequisites
+1. AWS CLI configured with appropriate credentials
+2. Terraform installed
+3. SSH key pair created in AWS
+4. Domain name (optional, for SSL)
+
+## Deployment Steps
+
+### 1. Prepare Environment
+```bash
+# Clone repository
+git clone <repository-url>
+cd aws-terraform-ansible-infra
+
+# Copy and configure variables
+cp terraform/aws/terraform.tfvars.example terraform/aws/terraform.tfvars
+# Edit terraform/aws/terraform.tfvars with your values
+```
+
+### 2. Deploy Infrastructure
+```bash
+# Initialize Terraform
+make aws-init
+
+# Plan deployment
+make aws-plan
+
+# Deploy (will prompt for confirmation)
+make aws-deploy
+```
+
+### 3. Configure Applications
+```bash
+# Run Ansible playbooks
+make ansible-aws
+```
+
+### 4. Verify Deployment
+```bash
+# Check outputs
+cd terraform/aws && terraform output
+
+# Test web access
+curl http://<load-balancer-dns>/
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **SSH Access Failed**: Check security group rules
+2. **Instance Not Starting**: Verify AMI and instance type
+3. **Load Balancer Health Checks**: Check security group and health check path
+
+### Rollback
+```bash
+# Destroy infrastructure
+make aws-destroy
+```
+EOF
+	@echo "$(GREEN)Runbooks generated$(NC)"
+
+docs-serve: ## Serve documentation locally
+	@echo "$(BLUE)Starting documentation server...$(NC)"
+	@cd docs && python3 -m http.server 8080
+	@echo "$(GREEN)Documentation available at http://localhost:8080$(NC)"
+
+##@ Demo Workflows
+
+demo-deploy: ## Quick demo deployment
+	@echo "$(BLUE)Starting demo deployment...$(NC)"
+	@echo "$(YELLOW)This will deploy a cost-optimized demo environment$(NC)"
+	@$(MAKE) local-start
+	@sleep 15
+	@$(MAKE) local-init
+	@$(MAKE) local-apply-auto
+	@$(MAKE) local-output
+	@$(MAKE) ansible-local
+	@echo "$(GREEN)✓ Demo deployment complete!$(NC)"
+	@echo ""
+	@echo "Demo URLs:"
+	@cd $(TERRAFORM_LOCALSTACK_DIR) && terraform output -json | jq -r '.web_access_urls.value | to_entries[] | "  \(.key): \(.value)"'
+
+demo-cleanup: ## Clean up demo
+	@echo "$(YELLOW)Cleaning up demo environment...$(NC)"
+	@$(MAKE) local-destroy-auto
+	@$(MAKE) local-stop
+	@$(MAKE) local-clean
+	@echo "$(GREEN)✓ Demo cleanup complete!$(NC)"
+
+demo-aws: ## Deploy demo to AWS (cost warning)
+	@echo "$(RED)⚠️  WARNING: This will deploy to AWS and incur costs!$(NC)"
+	@echo "Expected cost: ~$5-10 for a 3-hour demo"
+	@read -p "Continue with AWS demo deployment? [y/N] " -n 1 -r; echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "$(BLUE)Deploying demo to AWS...$(NC)"; \
+		$(MAKE) aws-init; \
+		$(MAKE) aws-plan; \
+		$(MAKE) aws-deploy; \
+		$(MAKE) ansible-aws; \
+		echo "$(GREEN)✓ AWS demo deployment complete!$(NC)"; \
+		echo "$(YELLOW)Remember to run 'make aws-destroy' when done!$(NC)"; \
+	else \
+		echo "$(YELLOW)AWS demo deployment cancelled$(NC)"; \
+	fi
+
+demo-quick: ## Quick LocalStack demo (no confirmation)
+	@echo "$(BLUE)Quick LocalStack demo...$(NC)"
+	@$(MAKE) local-start > /dev/null 2>&1
+	@sleep 20
+	@$(MAKE) local-init > /dev/null 2>&1
+	@$(MAKE) local-apply-auto > /dev/null 2>&1
+	@echo "$(GREEN)✓ Quick demo ready!$(NC)"
+	@echo "Run 'make local-output' to see access details"

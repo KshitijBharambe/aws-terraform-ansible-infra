@@ -1,12 +1,13 @@
 # Terraform AWS Backend Configuration
 # Configures S3 backend for state management with DynamoDB locking
+# Note: Backend configuration cannot use variables - must be hardcoded or use partial configuration
 
 terraform {
   backend "s3" {
-    bucket         = var.terraform_state_bucket
-    key            = var.terraform_state_key
-    region         = var.aws_region
-    dynamodb_table = var.terraform_lock_table
+    bucket         = "your-project-terraform-state"  # TODO: Replace with actual bucket name
+    key            = "infra/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-locks"
     encrypt        = true
     # Enable versioning for state history
     # Enable server-side encryption

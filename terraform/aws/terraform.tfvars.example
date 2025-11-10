@@ -1,0 +1,242 @@
+# AWS Terraform Variables Example
+# Copy this file to terraform.tfvars and customize for your deployment
+
+# =============================================================================
+# BASIC CONFIGURATION
+# =============================================================================
+
+# Project and Environment
+project_name = "infra-demo"
+environment  = "production"
+
+# AWS Region
+aws_region = "us-east-1"
+
+# SSH Configuration (REQUIRED for access)
+key_name = "your-ssh-key-name"  # Replace with your actual SSH key name
+
+# =============================================================================
+# COST OPTIMIZATION SETTINGS
+# =============================================================================
+
+# Enable/disable cost optimization features
+cost_optimization_enabled = true
+enable_spot_instances    = false  # Set to true for production workloads
+enable_savings_plans     = false  # Set to true for long-running workloads
+
+# =============================================================================
+# NETWORKING CONFIGURATION
+# =============================================================================
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# Availability Zones (update based on your region)
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Subnet CIDR Blocks
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
+
+# Gateway Configuration (affects cost significantly)
+enable_nat_gateway = false  # Set to true for production ($33/month additional)
+enable_vpn_gateway = false  # Set to true if you need VPN connectivity
+
+# =============================================================================
+# COMPUTE CONFIGURATION
+# =============================================================================
+
+# Instance Configuration
+instance_type = "t4g.micro"  # Cost-effective ARM instance
+instance_count = 1            # Number of instances to deploy
+
+# Root Volume Configuration
+root_volume_size = 8          # GB - minimum viable size
+root_volume_type = "gp3"      # Cost-effective storage type
+
+# Auto Scaling (disabled for cost optimization)
+enable_auto_scaling = false
+min_size            = 1
+max_size            = 2
+desired_capacity     = 1
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+
+# SSH Access (RESTRICT IN PRODUCTION!)
+allowed_ssh_cidr_blocks = ["0.0.0.0/0"]  # Replace with your IP in production
+
+# Web Access
+web_allowed_cidr_blocks = ["0.0.0.0/0"]  # Allow web access from anywhere
+
+# Port Configuration
+ssh_port = 22
+web_port = 80
+ssl_port = 443
+
+# =============================================================================
+# LOAD BALANCER CONFIGURATION
+# =============================================================================
+
+# Load Balancer Settings (adds $22/month)
+enable_load_balancer = false
+load_balancer_type   = "application"
+
+# Health Check Configuration
+health_check_path     = "/"
+health_check_interval = 30
+
+# SSL Configuration
+enable_ssl      = false  # Requires ACM certificate
+certificate_arn = ""     # Provide ACM certificate ARN if enabling SSL
+
+# =============================================================================
+# MONITORING AND ALERTS
+# =============================================================================
+
+# Monitoring Configuration
+enable_monitoring        = true
+enable_cloudwatch_alarms = true
+
+# Alert Configuration (REQUIRED for alarms)
+alarm_email = "your-email@example.com"  # Replace with your email
+
+# Threshold Configuration
+cpu_threshold    = 80  # Percentage
+memory_threshold = 85  # Percentage
+disk_threshold   = 90  # Percentage
+
+# =============================================================================
+# BACKUP CONFIGURATION
+# =============================================================================
+
+# Backup Settings
+enable_backup         = true
+backup_retention_days = 7
+backup_schedule      = "0 2 * * *"  # Daily at 2 AM
+
+# =============================================================================
+# COST MANAGEMENT
+# =============================================================================
+
+# Budget Configuration
+monthly_budget_limit = 15     # Alert at $15/month
+budget_threshold    = 80     # Alert at 80% of budget
+
+# Cost Anomaly Detection
+enable_cost_anomaly_detection = true
+
+# =============================================================================
+# TERRAFORM STATE CONFIGURATION
+# =============================================================================
+
+# State Management (these will be used for creating state resources)
+terraform_state_bucket = "your-project-terraform-state"  # Must be globally unique
+terraform_state_key    = "infra/terraform.tfstate"
+terraform_lock_table  = "terraform-state-locks"
+
+# State Access (will be populated with your ARN)
+terraform_state_access_arns = []
+
+# Log Retention
+terraform_log_retention_days = 7
+
+# =============================================================================
+# ADVANCED CONFIGURATION
+# =============================================================================
+
+# Assume Role (optional)
+assume_role_arn = ""
+
+# Organizations Integration
+enable_organizations_integration = false
+
+# Existing VPC (optional)
+use_existing_vpc = false
+existing_vpc_id  = ""
+
+# DNS Management (optional)
+enable_dns_management = false
+domain_name           = ""
+
+# CDN and WAF (costly features)
+enable_cloudfront = false  # Additional cost
+enable_waf       = false  # Additional cost
+
+# =============================================================================
+# ON-DEMAND DEPLOYMENT SETTINGS
+# =============================================================================
+
+# Deployment Duration Control
+deployment_duration_hours = 3    # Expected demo duration
+enable_auto_cleanup      = false  # Automatic cleanup
+cleanup_delay_hours      = 24     # Delay before cleanup
+
+# =============================================================================
+# COMMON TAGS
+# =============================================================================
+
+common_tags = {
+  Project     = "Infrastructure Demo"
+  Environment = "production"
+  Owner       = "DevOps Team"
+  ManagedBy   = "Terraform"
+  CostCenter  = "Engineering"
+}
+
+# =============================================================================
+# COST TRACKING TAGS
+# =============================================================================
+
+cost_tracking_tags = [
+  "Project",
+  "Environment", 
+  "Owner",
+  "ManagedBy",
+  "CostCenter"
+]
+
+# =============================================================================
+# EXAMPLE PRODUCTION CONFIGURATIONS
+# =============================================================================
+
+# Small Production Environment:
+# instance_type = "t4g.small"
+# instance_count = 2
+# enable_nat_gateway = true
+# enable_load_balancer = true
+# enable_ssl = true
+# enable_backup = true
+# backup_retention_days = 30
+# monthly_budget_limit = 100
+
+# Large Production Environment:
+# instance_type = "t4g.medium"
+# instance_count = 3
+# enable_auto_scaling = true
+# min_size = 2
+# max_size = 5
+# desired_capacity = 3
+# enable_nat_gateway = true
+# enable_load_balancer = true
+# enable_ssl = true
+# enable_cloudfront = true
+# enable_waf = true
+# enable_backup = true
+# backup_retention_days = 90
+# monthly_budget_limit = 500
+
+# =============================================================================
+# USAGE NOTES
+# =============================================================================
+
+# 1. Copy this file to terraform.tfvars
+# 2. Replace placeholder values with your actual values
+# 3. Update security settings for production use
+# 4. Configure SSH key and email for alarms
+# 5. Adjust budget limits based on your requirements
+# 6. Enable NAT gateway and load balancer for production
+# 7. Set up SSL certificate if enabling HTTPS
+# 8. Update backend.tf with your actual state bucket name
+# 9. Run: terraform init && terraform plan && terraform apply

@@ -1,0 +1,177 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        description: Trim trailing whitespace
+      - id: end-of-file-fixer
+        description: Ensure files end with newline
+      - id: check-yaml
+        description: Check YAML syntax
+        args: ["--unsafe"] # Allow custom YAML tags
+      - id: check-json
+        description: Check JSON syntax
+      - id: check-merge-conflict
+        description: Check for merge conflicts
+      - id: check-added-large-files
+        description: Prevent large files from being committed
+        args: ["--maxkb=1000"]
+      - id: check-case-conflict
+        description: Check for case conflicts
+      - id: check-shebang-scripts-are-executable
+        description: Ensure scripts with shebangs are executable
+      - id: mixed-line-ending
+        description: Ensure consistent line endings
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.86.0
+    hooks:
+      - id: terraform_fmt
+        description: Format Terraform files
+      - id: terraform_validate
+        description: Validate Terraform files
+        args:
+          - --tf-init-args=-upgrade
+      - id: terraform_tflint
+        description: Lint Terraform files
+        args:
+          - --args=--only=terraform_deprecated_interpolation
+          - --args=--only=terraform_deprecated_index
+          - --args=--only=terraform_unused_declarations
+          - --args=--only=terraform_comment_syntax
+      - id: terraform_tfsec
+        description: Security scan Terraform files
+        args:
+          - --args=--exclude=AWS008,AWS017
+      - id: terraform_checkov
+        description: Checkov policy scan
+        args:
+          - --args=--framework=terraform
+          - --args=--skip-check=CKV_AWS_20
+
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v6.22.0
+    hooks:
+      - id: ansible-lint
+        description: Lint Ansible playbooks and roles
+        files: \.(yaml|yml)$
+        exclude: ^\.github/
+        args:
+          - --exclude=.github/
+          - --exclude=tests/
+          - --exclude=molecule/
+        additional_dependencies:
+          - ansible-core>=2.15.0
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        description: Lint YAML files
+        args: [--strict]
+        files: \.(yaml|yml)$
+        types: [file]
+        exclude: ^\.github/
+
+  - repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+      - id: black
+        description: Format Python files
+        language_version: python3
+        files: ^scripts/.*\.py$
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.1.0
+    hooks:
+      - id: flake8
+        description: Lint Python files
+        files: ^scripts/.*\.py$
+        additional_dependencies:
+          - flake8-docstrings
+          - flake8-import-order
+        args:
+          - --max-line-length=88
+          - --extend-ignore=E203,W503
+          - --max-complexity=10
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.37.0
+    hooks:
+      - id: markdownlint
+        description: Lint Markdown files
+        args:
+          - --fix
+        exclude: ^\.github/
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        description: Lint Dockerfiles
+        files: ^Dockerfile$
+
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: Shellcheck
+        description: Lint shell scripts
+        entry: shellcheck
+        language: system
+        files: \.(sh|bash|ksh)$
+        exclude: ^\.git/
+        args:
+          - --severity=warning
+          - --exclude=SC1091 # Don't follow source files
+          - --exclude=SC2086 # Double quote to prevent globbing
+
+      - id: terraform-docs
+        name: Terraform docs
+        description: Generate Terraform documentation
+        entry: terraform-docs
+        language: system
+        files: ^terraform/.*/.*\.tf$
+        args:
+          - markdown
+          - table
+          - .
+
+      - id: ansible-syntax-check
+        name: Ansible syntax check
+        description: Check Ansible syntax
+        entry: ansible-playbook
+        language: system
+        files: ^ansible/.*\.(yaml|yml)$
+        args:
+          - --syntax-check
+          - --inventory=ansible/inventory/localstack.ini
+        pass_filenames: true
+
+      - id: check-executable-permissions
+        name: Check executable permissions
+        description: Ensure scripts have correct permissions
+        entry: bash
+        language: system
+        files: \.(sh|bash|ksh)$
+        args:
+          - -c
+          - |
+            for file in "$@"; do
+              if [ -x "$file" ]; then
+                echo "✓ $file is executable"
+              else
+                echo "⚠ $file is not executable, consider: chmod +x $file"
+              fi
+            done
+        pass_filenames: true
+
+# Configuration for specific hooks
+default_language_version:
+  python: python3.11
+
+# Global configuration
+fail_fast: false
+default_stages: [commit]
+skip: []
+default_install_hook_types: [pre-commit, pre-push]
