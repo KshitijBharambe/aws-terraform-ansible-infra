@@ -37,6 +37,12 @@ variable "iam_instance_profile" {
   type        = string
 }
 
+variable "iam_instance_profile_arn" {
+  description = "IAM instance profile ARN"
+  type        = string
+  default     = ""
+}
+
 variable "key_name" {
   description = "SSH key pair name"
   type        = string
@@ -47,6 +53,12 @@ variable "associate_public_ip" {
   description = "Associate public IP address with instances"
   type        = bool
   default     = true
+}
+
+variable "enable_eip" {
+  description = "Enable Elastic IP allocation and association (disable for LocalStack)"
+  type        = bool
+  default     = false
 }
 
 variable "user_data_script" {

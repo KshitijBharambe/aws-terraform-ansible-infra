@@ -128,28 +128,28 @@ output "ssh_command_private" {
 # Cost Information
 output "estimated_monthly_cost" {
   description = "Estimated monthly cost in USD"
-  value       = {
-    compute      = var.use_free_tier ? 0.0 : (length(oci_core_instance.public_instances) + length(oci_core_instance.private_instances)) * 0.05
-    storage      = var.use_free_tier ? 0.0 : length(oci_core_volume.data_volumes) * var.block_volume_size * 0.0025
+  value = {
+    compute       = var.use_free_tier ? 0.0 : (length(oci_core_instance.public_instances) + length(oci_core_instance.private_instances)) * 0.05
+    storage       = var.use_free_tier ? 0.0 : length(oci_core_volume.data_volumes) * var.block_volume_size * 0.0025
     load_balancer = var.use_free_tier ? 0.0 : length(oci_load_balancer_load_balancer.main) * (var.load_balancer_shape == "flexible" ? var.load_balancer_bandwidth * 0.0025 : 0.025)
-    database     = length(oci_database_db_system.main) > 0 ? 0.3 : 0.0
-    total        = var.use_free_tier ? 0.0 : ((length(oci_core_instance.public_instances) + length(oci_core_instance.private_instances)) * 0.05) + (length(oci_core_volume.data_volumes) * var.block_volume_size * 0.0025) + (length(oci_load_balancer_load_balancer.main) > 0 ? (var.load_balancer_shape == "flexible" ? var.load_balancer_bandwidth * 0.0025 : 0.025) : 0.0) + (length(oci_database_db_system.main) > 0 ? 0.3 : 0.0)
+    database      = length(oci_database_db_system.main) > 0 ? 0.3 : 0.0
+    total         = var.use_free_tier ? 0.0 : ((length(oci_core_instance.public_instances) + length(oci_core_instance.private_instances)) * 0.05) + (length(oci_core_volume.data_volumes) * var.block_volume_size * 0.0025) + (length(oci_load_balancer_load_balancer.main) > 0 ? (var.load_balancer_shape == "flexible" ? var.load_balancer_bandwidth * 0.0025 : 0.025) : 0.0) + (length(oci_database_db_system.main) > 0 ? 0.3 : 0.0)
   }
 }
 
 output "free_tier_usage" {
   description = "Free tier resource usage summary"
   value = {
-    compute_instances_used   = length(oci_core_instance.public_instances) + length(oci_core_instance.private_instances)
+    compute_instances_used  = length(oci_core_instance.public_instances) + length(oci_core_instance.private_instances)
     compute_instances_limit = var.use_free_tier ? 2 : 10
-    block_volumes_used     = length(oci_core_volume.data_volumes)
-    block_volumes_limit    = var.use_free_tier ? 0 : 200
-    load_balancers_used    = length(oci_load_balancer_load_balancer.main)
-    load_balancers_limit   = var.use_free_tier ? 0 : 10
-    databases_used        = length(oci_database_db_system.main)
-    databases_limit       = var.use_free_tier ? 0 : 2
-    bandwidth_used        = var.load_balancer_shape == "flexible" ? var.load_balancer_bandwidth : 0
-    bandwidth_limit       = var.use_free_tier ? 0 : 10000
+    block_volumes_used      = length(oci_core_volume.data_volumes)
+    block_volumes_limit     = var.use_free_tier ? 0 : 200
+    load_balancers_used     = length(oci_load_balancer_load_balancer.main)
+    load_balancers_limit    = var.use_free_tier ? 0 : 10
+    databases_used          = length(oci_database_db_system.main)
+    databases_limit         = var.use_free_tier ? 0 : 2
+    bandwidth_used          = var.load_balancer_shape == "flexible" ? var.load_balancer_bandwidth : 0
+    bandwidth_limit         = var.use_free_tier ? 0 : 10000
   }
 }
 
@@ -157,14 +157,14 @@ output "free_tier_usage" {
 output "security_configuration" {
   description = "Security configuration summary"
   value = {
-    security_lists_enabled = var.enable_security_lists
-    nat_gateway_enabled   = var.enable_nat_gateway
+    security_lists_enabled  = var.enable_security_lists
+    nat_gateway_enabled     = var.enable_nat_gateway
     service_gateway_enabled = var.enable_service_gateway
-    allowed_ssh_cidrs    = var.allowed_ssh_cidrs
-    allowed_http_cidrs   = var.allowed_http_cidrs
-    allowed_https_cidrs  = var.allowed_https_cidrs
-    monitoring_enabled   = var.enable_monitoring
-    notifications_enabled = var.enable_notifications
+    allowed_ssh_cidrs       = var.allowed_ssh_cidrs
+    allowed_http_cidrs      = var.allowed_http_cidrs
+    allowed_https_cidrs     = var.allowed_https_cidrs
+    monitoring_enabled      = var.enable_monitoring
+    notifications_enabled   = var.enable_notifications
   }
 }
 
@@ -172,14 +172,14 @@ output "security_configuration" {
 output "network_information" {
   description = "Network configuration summary"
   value = {
-    vcn_cidr              = var.vcn_cidr
-    public_subnet_cidr      = var.public_subnet_cidr
-    private_subnet_cidr     = var.private_subnet_cidr
-    internet_gateway        = "Enabled"
-    nat_gateway           = var.enable_nat_gateway ? "Enabled" : "Disabled"
-    service_gateway       = var.enable_service_gateway ? "Enabled" : "Disabled"
+    vcn_cidr             = var.vcn_cidr
+    public_subnet_cidr   = var.public_subnet_cidr
+    private_subnet_cidr  = var.private_subnet_cidr
+    internet_gateway     = "Enabled"
+    nat_gateway          = var.enable_nat_gateway ? "Enabled" : "Disabled"
+    service_gateway      = var.enable_service_gateway ? "Enabled" : "Disabled"
     dns_label            = replace(var.project_name, "-", "")
-    availability_domains  = length(local.availability_domains)
+    availability_domains = length(local.availability_domains)
   }
 }
 
@@ -189,7 +189,7 @@ output "access_urls" {
   value = {
     load_balancer_http  = length(oci_load_balancer_load_balancer.main) > 0 ? "http://${oci_load_balancer_load_balancer.main[0].ip_address_details[0].ip_address}" : null
     load_balancer_https = length(oci_load_balancer_load_balancer.main) > 0 ? "https://${oci_load_balancer_load_balancer.main[0].ip_address_details[0].ip_address}" : null
-    web_servers        = formatlist("http://%s", oci_core_instance.public_instances[*].public_ip)
+    web_servers         = formatlist("http://%s", oci_core_instance.public_instances[*].public_ip)
   }
 }
 
@@ -197,10 +197,10 @@ output "access_urls" {
 output "backup_configuration" {
   description = "Backup configuration summary"
   value = {
-    backup_enabled           = var.backup_enabled
-    backup_retention_days    = var.backup_retention_days
-    auto_backup_enabled     = length(oci_database_db_system.main) > 0 ? var.backup_enabled : false
-    volume_backup_enabled    = length(oci_core_volume.data_volumes) > 0 ? var.backup_enabled : false
+    backup_enabled        = var.backup_enabled
+    backup_retention_days = var.backup_retention_days
+    auto_backup_enabled   = length(oci_database_db_system.main) > 0 ? var.backup_enabled : false
+    volume_backup_enabled = length(oci_core_volume.data_volumes) > 0 ? var.backup_enabled : false
   }
 }
 
@@ -208,11 +208,11 @@ output "backup_configuration" {
 output "monitoring_configuration" {
   description = "Monitoring configuration summary"
   value = {
-    monitoring_enabled        = var.enable_monitoring
-    cpu_alarms_configured  = length(oci_monitoring_metric_alarm.cpu_alarm)
-    notifications_enabled    = var.enable_notifications
-    alarm_topic_id         = length(oci_ons_notification_topic.main) > 0 ? oci_ons_notification_topic.main[0].id : null
-    email_subscriptions    = length(oci_ons_subscription.email)
+    monitoring_enabled    = var.enable_monitoring
+    cpu_alarms_configured = length(oci_monitoring_metric_alarm.cpu_alarm)
+    notifications_enabled = var.enable_notifications
+    alarm_topic_id        = length(oci_ons_notification_topic.main) > 0 ? oci_ons_notification_topic.main[0].id : null
+    email_subscriptions   = length(oci_ons_subscription.email)
   }
 }
 
@@ -220,10 +220,10 @@ output "monitoring_configuration" {
 output "disaster_recovery_configuration" {
   description = "Disaster recovery configuration"
   value = {
-    dr_enabled               = var.enable_dr
-    secondary_region          = var.secondary_region
-    replication_frequency     = var.dr_replication_frequency
-    failover_test_enabled    = var.dr_failover_test_enabled
+    dr_enabled            = var.enable_dr
+    secondary_region      = var.secondary_region
+    replication_frequency = var.dr_replication_frequency
+    failover_test_enabled = var.dr_failover_test_enabled
   }
 }
 
@@ -237,10 +237,10 @@ output "applied_tags" {
 output "terraform_configuration" {
   description = "Terraform configuration summary"
   value = {
-    terraform_version       = ">= 1.5.0"
-    oci_provider_version   = "~> 5.0"
-    backend_configured    = false
-    state_file_location   = "Local"
-    workspace           = "default"
+    terraform_version    = ">= 1.5.0"
+    oci_provider_version = "~> 5.0"
+    backend_configured   = false
+    state_file_location  = "Local"
+    workspace            = "default"
   }
 }

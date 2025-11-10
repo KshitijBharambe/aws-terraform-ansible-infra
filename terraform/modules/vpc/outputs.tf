@@ -84,3 +84,13 @@ output "flow_logs_log_group_name" {
   description = "Name of the CloudWatch Log Group for VPC Flow Logs"
   value       = var.enable_flow_logs ? aws_cloudwatch_log_group.flow_logs[0].name : null
 }
+
+output "vpc_cidr_block" {
+  description = "The CIDR block of the VPC (alias for vpc_cidr)"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "availability_zones" {
+  description = "List of availability zones used"
+  value       = var.availability_zones
+}

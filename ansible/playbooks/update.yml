@@ -1,0 +1,495 @@
+---
+- name: System Update and Maintenance Playbook
+  hosts: all
+  become: yes
+  vars:
+    update_enabled: "{{ update_enabled | default(true) }}"
+    update_type: "{{ update_type | default('security') }}"
+    update_reboot: "{{ update_reboot | default(true) }}"
+    update_backup_config: "{{ update_backup_config | default(true) }}"
+    update_rollback_enabled: "{{ update_rollback_enabled | default(true) }}"
+    update_schedule_window: "{{ update_schedule_window | default('02:00-04:00') }}"
+    update_exclude_packages: "{{ update_exclude_packages | default([]) }}"
+    update_include_packages: "{{ update_include_packages | default([]) }}"
+    update_notification_email: "{{ update_notification_email | default('admin@company.com') }}"
+    update_maintenance_mode: "{{ update_maintenance_mode | default(true) }}"
+    update_dry_run: "{{ update_dry_run | default(false) }}"
+    update_log_level: "{{ update_log_level | default('INFO') }}"
+    update_backup_dir: "{{ update_backup_dir | default('/var/backups/pre-update') }}"
+    update_rollback_dir: "{{ update_rollback_dir | default('/var/backups/rollback') }}"
+
+  pre_tasks:
+    - name: Load update variables
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+        - "{{ ansible_os_family | lower }}.yml"
+        - "default.yml"
+      tags: always
+
+    - name: Check if update is enabled
+      fail:
+        msg: "Update is disabled. Set update_enabled=true to enable."
+      when: not update_enabled
+      tags: validation
+
+    - name: Validate update type
+      fail:
+        msg: "Invalid update type: {{ update_type }}. Must be 'security', 'full', 'package', or 'minimal'."
+      when: update_type not in ['security', 'full', 'package', 'minimal']
+      tags: validation
+
+    - name: Create update directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - "{{ update_backup_dir }}"
+        - "{{ update_rollback_dir }}"
+        - /var/log/system-updates
+        - /tmp/system-updates
+      tags: setup
+
+    - name: Setup update logging
+      file:
+        path: /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+        state: touch
+        owner: root
+        group: root
+        mode: "0644"
+      tags: logging
+
+    - name: Check system load before update
+      shell: uptime
+      register: pre_update_uptime
+      tags: pre-checks
+
+    - name: Check disk space before update
+      command: df -h /
+      register: pre_update_disk
+      tags: pre-checks
+
+    - name: Check running services before update
+      systemd:
+        name: "{{ item }}"
+      register: pre_update_services
+      loop:
+        - nginx
+        - httpd
+        - apache2
+        - mysql
+        - postgresql
+      ignore_errors: yes
+      tags: pre-checks
+
+    - name: Display pre-update system information
+      debug:
+        msg: |
+          System Information Before Update:
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Kernel: {{ ansible_kernel }}
+          Uptime: {{ pre_update_uptime.stdout }}
+          Disk Usage: {{ pre_update_disk.stdout }}
+          Update Type: {{ update_type }}
+          Reboot Enabled: {{ update_reboot }}
+          Backup Enabled: {{ update_backup_config }}
+          Maintenance Mode: {{ update_maintenance_mode }}
+          Dry Run: {{ update_dry_run }}
+      tags: pre-checks
+
+    - name: Enable maintenance mode if configured
+      template:
+        src: maintenance.html.j2
+        dest: /var/www/html/maintenance.html
+        owner: www-data
+        group: www-data
+        mode: "0644"
+      tags: maintenance
+      when: update_maintenance_mode and 'webservers' in group_names
+
+    - name: Create pre-update backup
+      shell: |
+        echo "Creating pre-update backup at $(date)" >> /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+        tar -czf {{ update_backup_dir }}/pre-update-{{ ansible_date_time.epoch }}.tar.gz \
+          /etc \
+          /var/www \
+          /home \
+          /opt \
+          --exclude=/var/www/html/maintenance.html \
+          2>> /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+      register: pre_update_backup
+      tags: backup
+      when: update_backup_config and not update_dry_run
+      ignore_errors: yes
+
+  roles:
+    - role: common
+      tags: common
+      when: update_enabled
+
+    - role: security
+      tags: security-hardening
+      when: update_enabled and update_type in ['security', 'full']
+
+  post_tasks:
+    - name: Update package cache (Debian/Ubuntu)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      tags: package-update
+      register: apt_cache_update
+
+    - name: Update package cache (RHEL/CentOS)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+      tags: package-update
+      register: yum_cache_update
+
+    - name: Update package cache (Amazon Linux)
+      yum:
+        update_cache: yes
+      when: ansible_distribution == "Amazon"
+      tags: package-update
+      register: amazon_cache_update
+
+    - name: Security updates only (Debian/Ubuntu)
+      apt:
+        upgrade: dist
+        update_cache: yes
+        cache_valid_time: 3600
+        only_upgrade: "{{ update_exclude_packages }}"
+        dpkg_options: "force-confdef,force-confold"
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == 'security'
+        - not update_dry_run
+      tags: security-update
+      register: security_update_debian
+
+    - name: Security updates only (RHEL/CentOS)
+      yum:
+        name: "*"
+        state: latest
+        security: yes
+        exclude: "{{ update_exclude_packages | join(',') }}"
+        update_cache: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - update_type == 'security'
+        - not update_dry_run
+      tags: security-update
+      register: security_update_rhel
+
+    - name: Full system update (Debian/Ubuntu)
+      apt:
+        upgrade: dist
+        update_cache: yes
+        cache_valid_time: 3600
+        dpkg_options: "force-confdef,force-confold"
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == 'full'
+        - not update_dry_run
+      tags: full-update
+      register: full_update_debian
+
+    - name: Full system update (RHEL/CentOS)
+      yum:
+        name: "*"
+        state: latest
+        exclude: "{{ update_exclude_packages | join(',') }}"
+        update_cache: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - update_type == 'full'
+        - not update_dry_run
+      tags: full-update
+      register: full_update_rhel
+
+    - name: Update specific packages (Debian/Ubuntu)
+      apt:
+        name: "{{ update_include_packages }}"
+        state: latest
+        update_cache: yes
+        cache_valid_time: 3600
+        dpkg_options: "force-confdef,force-confold"
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == 'package'
+        - update_include_packages | length > 0
+        - not update_dry_run
+      tags: package-update
+      register: package_update_debian
+
+    - name: Update specific packages (RHEL/CentOS)
+      yum:
+        name: "{{ update_include_packages }}"
+        state: latest
+        update_cache: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - update_type == 'package'
+        - update_include_packages | length > 0
+        - not update_dry_run
+      tags: package-update
+      register: package_update_rhel
+
+    - name: Minimal security updates (Debian/Ubuntu)
+      apt:
+        name:
+          - openssl
+          - openssh-server
+          - curl
+          - wget
+          - python3
+          - python3-pip
+        state: latest
+        update_cache: yes
+        cache_valid_time: 3600
+        dpkg_options: "force-confdef,force-confold"
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == 'minimal'
+        - not update_dry_run
+      tags: minimal-update
+      register: minimal_update_debian
+
+    - name: Minimal security updates (RHEL/CentOS)
+      yum:
+        name:
+          - openssl
+          - openssh-server
+          - curl
+          - wget
+          - python3
+          - python3-pip
+        state: latest
+        update_cache: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - update_type == 'minimal'
+        - not update_dry_run
+      tags: minimal-update
+      register: minimal_update_rhel
+
+    - name: Clean up old packages (Debian/Ubuntu)
+      apt:
+        autoremove: yes
+        purge: yes
+      when:
+        - ansible_os_family == "Debian"
+        - update_type in ['full', 'security']
+        - not update_dry_run
+      tags: cleanup
+
+    - name: Clean up old packages (RHEL/CentOS)
+      yum:
+        autoremove: yes
+      when:
+        - ansible_os_family == "RedHat"
+        - update_type in ['full', 'security']
+        - not update_dry_run
+      tags: cleanup
+
+    - name: Create post-update backup
+      shell: |
+        echo "Creating post-update backup at $(date)" >> /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+        tar -czf {{ update_backup_dir }}/post-update-{{ ansible_date_time.epoch }}.tar.gz \
+          /etc \
+          /var/www \
+          /home \
+          /opt \
+          2>> /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+      register: post_update_backup
+      tags: backup
+      when: update_backup_config and not update_dry_run
+      ignore_errors: yes
+
+    - name: Create rollback package
+      shell: |
+        echo "Creating rollback package at $(date)" >> /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+        tar -czf {{ update_rollback_dir }}/rollback-{{ ansible_date_time.epoch }}.tar.gz \
+          {{ update_backup_dir }}/pre-update-{{ ansible_date_time.epoch }}.tar.gz \
+          2>> /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+      register: rollback_package
+      tags: rollback
+      when: update_rollback_enabled and update_backup_config and not update_dry_run
+      ignore_errors: yes
+
+    - name: Update package database (Debian/Ubuntu)
+      shell: dpkg --get-selections > {{ update_backup_dir }}/package-selections-{{ ansible_date_time.epoch }}.txt
+      tags: backup
+      when:
+        - ansible_os_family == "Debian"
+        - update_backup_config
+        - not update_dry_run
+
+    - name: Restart critical services (Debian/Ubuntu)
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+        enabled: yes
+      loop:
+        - nginx
+        - apache2
+        - mysql
+        - postgresql
+      register: service_restart_debian
+      when:
+        - ansible_os_family == "Debian"
+        - update_reboot == false
+        - not update_dry_run
+      ignore_errors: yes
+      tags: services
+
+    - name: Restart critical services (RHEL/CentOS)
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+        enabled: yes
+      loop:
+        - nginx
+        - httpd
+        - mysqld
+        - postgresql
+      register: service_restart_rhel
+      when:
+        - ansible_os_family == "RedHat"
+        - update_reboot == false
+        - not update_dry_run
+      ignore_errors: yes
+      tags: services
+
+    - name: Reboot system if required
+      reboot:
+        reboot_timeout: 600
+        test_command: uptime
+      when:
+        - update_reboot
+        - not update_dry_run
+        - (security_update_debian.changed or full_update_debian.changed or package_update_debian.changed or minimal_update_debian.changed or
+          security_update_rhel.changed or full_update_rhel.changed or package_update_rhel.changed or minimal_update_rhel.changed)
+      tags: reboot
+
+    - name: Wait for system to come back online
+      wait_for_connection:
+        timeout: 600
+        delay: 30
+      when:
+        - update_reboot
+        - not update_dry_run
+      delegate_to: localhost
+      tags: reboot
+
+    - name: Check system load after update
+      shell: uptime
+      register: post_update_uptime
+      tags: post-checks
+
+    - name: Check disk space after update
+      command: df -h /
+      register: post_update_disk
+      tags: post-checks
+
+    - name: Check running services after update
+      systemd:
+        name: "{{ item }}"
+      register: post_update_services
+      loop:
+        - nginx
+        - httpd
+        - apache2
+        - mysql
+        - postgresql
+      ignore_errors: yes
+      tags: post-checks
+
+    - name: Test web server after update
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}/"
+        method: GET
+        status_code: [200, 301, 302]
+        timeout: 30
+      register: web_server_test
+      tags: verification
+      when: "'webservers' in group_names"
+      ignore_errors: yes
+
+    - name: Test application after update
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}/health"
+        method: GET
+        status_code: [200]
+        timeout: 30
+      register: app_health_test
+      tags: verification
+      when: "'webservers' in group_names"
+      ignore_errors: yes
+
+    - name: Disable maintenance mode
+      file:
+        path: /var/www/html/maintenance.html
+        state: absent
+      tags: maintenance
+      when: update_maintenance_mode and 'webservers' in group_names
+
+    - name: Generate update report
+      template:
+        src: update-report.j2
+        dest: "{{ update_backup_dir }}/update-report-{{ ansible_date_time.epoch }}.html"
+        owner: root
+        group: root
+        mode: "0644"
+      tags: reporting
+
+    - name: Send update notification email
+      mail:
+        to: "{{ update_notification_email }}"
+        subject: "System Update Completed - {{ ansible_hostname }}"
+        body: |
+          System update has been completed successfully on {{ ansible_hostname }}.
+
+          Update Details:
+          - Type: {{ update_type }}
+          - Date: {{ ansible_date_time.iso8601 }}
+          - Reboot: {{ update_reboot }}
+          - Backup: {{ update_backup_config }}
+          - Dry Run: {{ update_dry_run }}
+
+          System Status:
+          - Uptime Before: {{ pre_update_uptime.stdout }}
+          - Uptime After: {{ post_update_uptime.stdout }}
+          - Web Server Test: {{ 'PASS' if web_server_test.status == 200 else 'FAIL' }}
+          - Health Check: {{ 'PASS' if app_health_test.status == 200 else 'FAIL' }}
+
+          For detailed logs, check: /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+      delegate_to: localhost
+      tags: notification
+      when: update_notification_email != '' and not update_dry_run
+
+    - name: Display update summary
+      debug:
+        msg: |
+          System Update Summary:
+          Hostname: {{ ansible_hostname }}
+          Update Type: {{ update_type }}
+          Update Status: {{ 'SUCCESS' if not update_dry_run else 'DRY RUN' }}
+          Backup Created: {{ 'YES' if pre_update_backup.rc == 0 else 'NO' }}
+          Rollback Package: {{ 'CREATED' if rollback_package.rc == 0 else 'NOT CREATED' }}
+          Reboot Required: {{ update_reboot }}
+          Web Server Test: {{ 'PASS' if web_server_test.status == 200 else 'FAIL' }}
+          Health Check: {{ 'PASS' if app_health_test.status == 200 else 'FAIL' }}
+          Report Location: {{ update_backup_dir }}/update-report-{{ ansible_date_time.epoch }}.html
+          Log Location: /var/log/system-updates/update-{{ ansible_date_time.epoch }}.log
+      tags: summary
+# Example usage:
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/update.yml
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/update.yml -e "update_type=security update_reboot=true"
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/update.yml -e "update_type=full update_dry_run=true"
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/update.yml --tags "security-update"

@@ -78,7 +78,7 @@ variable "target_protocol" {
   description = "Protocol to use for routing traffic to targets"
   type        = string
   default     = "HTTP"
-  
+
   validation {
     condition     = contains(["HTTP", "HTTPS"], var.target_protocol)
     error_message = "The target_protocol value must be one of: HTTP, HTTPS."
@@ -86,10 +86,10 @@ variable "target_protocol" {
 }
 
 variable "target_type" {
-  description  = "Type of target that you must specify when registering targets with this target group"
-  type         = string
-  default      = "instance"
-  
+  description = "Type of target that you must specify when registering targets with this target group"
+  type        = string
+  default     = "instance"
+
   validation {
     condition     = contains(["instance", "ip", "lambda"], var.target_type)
     error_message = "The target_type value must be one of: instance, ip, lambda."
@@ -119,10 +119,10 @@ variable "health_check_port" {
 }
 
 variable "health_check_protocol" {
-  description  = "Protocol to use to connect with the target"
-  type         = string
-  default      = "HTTP"
-  
+  description = "Protocol to use to connect with the target"
+  type        = string
+  default     = "HTTP"
+
   validation {
     condition     = contains(["HTTP", "HTTPS", "TCP"], var.health_check_protocol)
     error_message = "The health_check_protocol value must be one of: HTTP, HTTPS, TCP."
@@ -178,10 +178,10 @@ variable "enable_stickiness" {
 }
 
 variable "stickiness_type" {
-  description  = "The type of sticky sessions"
-  type         = string
-  default      = "lb_cookie"
-  
+  description = "The type of sticky sessions"
+  type        = string
+  default     = "lb_cookie"
+
   validation {
     condition     = contains(["lb_cookie", "app_cookie"], var.stickiness_type)
     error_message = "The stickiness_type value must be one of: lb_cookie, app_cookie."

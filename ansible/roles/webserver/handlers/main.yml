@@ -1,0 +1,24 @@
+---
+- name: Restart nginx
+  systemd:
+    name: nginx
+    state: restarted
+  when: webserver_type == 'nginx'
+
+- name: Restart apache
+  systemd:
+    name: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    state: restarted
+  when: webserver_type == 'apache'
+
+- name: Reload nginx
+  systemd:
+    name: nginx
+    state: reloaded
+  when: webserver_type == 'nginx'
+
+- name: Reload apache
+  systemd:
+    name: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    state: reloaded
+  when: webserver_type == 'apache'

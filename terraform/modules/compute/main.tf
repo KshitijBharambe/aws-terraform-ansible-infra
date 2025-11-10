@@ -34,28 +34,6 @@ locals {
 }
 
 #===============================================================================
-# SSH Key Pair (if not provided)
-#===============================================================================
-
-resource "aws_key_pair" "instance_key" {
-  count = var.key_name == "" ? 1 : 0
-
-  key_name   = "${local.name_prefix}-key"
-  public_key = file("~/.ssh/id_rsa.pub")
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.name_prefix}-key"
-    }
-  )
-}
-
-locals {
-  final_key_name = var.key_name != "" ? var.key_name : aws_key_pair.instance_key[0].key_name
-}
-
-#===============================================================================
 # Launch Template
 #===============================================================================
 
@@ -63,7 +41,7 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = var.ami_id
   instance_type = var.instance_type
-  key_name      = local.final_key_name
+  key_name      = var.key_name
 
   iam_instance_profile {
     name = var.iam_instance_profile
@@ -209,52 +187,20 @@ resource "aws_instance" "main" {
 
   ami           = var.ami_id
   instance_type = var.instance_type
-  key_name      = local.final_key_name
+  key_name      = var.key_name != "" ? var.key_name : null
 
   subnet_id                   = var.subnet_ids[count.index % length(var.subnet_ids)]
   vpc_security_group_ids      = var.security_group_ids
   associate_public_ip_address = var.associate_public_ip
-  iam_instance_profile        = var.iam_instance_profile
+  iam_instance_profile        = var.iam_instance_profile != "" ? var.iam_instance_profile : null
 
   user_data = local.user_data
-
-  # Root volume configuration
-  root_block_device {
-    volume_size           = var.root_volume_size
-    volume_type           = var.root_volume_type
-    delete_on_termination = true
-    encrypted             = var.enable_ebs_encryption
-    kms_key_id            = var.ebs_kms_key_id != "" ? var.ebs_kms_key_id : null
-
-    tags = merge(
-      local.common_tags,
-      {
-        Name = "${local.name_prefix}-root-volume-${count.index + 1}"
-      }
-    )
-  }
-
-  # Metadata options (IMDSv2)
-  metadata_options {
-    http_endpoint               = var.metadata_options.http_endpoint
-    http_tokens                 = var.metadata_options.http_tokens
-    http_put_response_hop_limit = var.metadata_options.http_put_response_hop_limit
-  }
 
   # Monitoring
   monitoring = var.enable_monitoring
 
   # Termination protection
   disable_api_termination = var.enable_termination_protection
-
-  # T instance credit specification
-  dynamic "credit_specification" {
-    for_each = substr(var.instance_type, 0, 2) == "t2" || substr(var.instance_type, 0, 2) == "t3" || substr(var.instance_type, 0, 3) == "t4g" ? [1] : []
-
-    content {
-      cpu_credits = var.cpu_credits
-    }
-  }
 
   tags = merge(
     local.common_tags,
@@ -278,10 +224,7 @@ resource "aws_instance" "main" {
 #===============================================================================
 
 resource "aws_eip" "instance" {
-  count = var.enable_auto_scaling ? 0 : (var.associate_public_ip ? var.instance_count : 0)
-
-  instance = aws_instance.main[count.index].id
-  domain   = "vpc"
+  count = var.enable_auto_scaling ? 0 : (var.associate_public_ip && var.enable_eip ? var.instance_count : 0)
 
   tags = merge(
     local.common_tags,
@@ -289,8 +232,15 @@ resource "aws_eip" "instance" {
       Name = "${local.name_prefix}-eip-${count.index + 1}"
     }
   )
+}
 
-  depends_on = [aws_instance.main]
+resource "aws_eip_association" "instance" {
+  count = var.enable_auto_scaling ? 0 : (var.associate_public_ip && var.enable_eip ? var.instance_count : 0)
+
+  instance_id   = aws_instance.main[count.index].id
+  allocation_id = aws_eip.instance[count.index].id
+
+  depends_on = [aws_instance.main, aws_eip.instance]
 }
 
 #===============================================================================

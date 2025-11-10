@@ -19,14 +19,14 @@ output "load_balancer_zone_id" {
   value       = aws_lb.main.zone_id
 }
 
-output "load_balancer_canonical_hosted_zone_id" {
-  description = "Canonical hosted zone ID of the load balancer"
-  value       = aws_lb.main.canonical_hosted_zone_id
-}
-
 output "load_balancer_id" {
   description = "ID of the load balancer"
   value       = aws_lb.main.id
+}
+
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer (for compatibility)"
+  value       = aws_lb.main.dns_name
 }
 
 #===============================================================================
@@ -93,9 +93,4 @@ output "vpc_id" {
 output "security_group_ids" {
   description = "Security group IDs attached to the load balancer"
   value       = aws_lb.main.security_groups
-}
-
-output "subnet_ids" {
-  description = "Subnet IDs attached to the load balancer"
-  value       = aws_lb.main.subnet_ids
 }

@@ -21,7 +21,7 @@ output "instance_public_ips" {
 
 output "elastic_ips" {
   description = "Elastic IP addresses (if created)"
-  value       = aws_eip.instance[*].public_ip
+  value       = var.enable_eip ? aws_eip.instance[*].public_ip : []
 }
 
 output "instance_availability_zones" {
@@ -82,19 +82,7 @@ output "launch_template_latest_version" {
   value       = aws_launch_template.main.latest_version
 }
 
-#===============================================================================
-# Key Pair Information
-#===============================================================================
 
-output "key_pair_name" {
-  description = "Name of the SSH key pair used"
-  value       = local.final_key_name
-}
-
-output "key_pair_id" {
-  description = "ID of the created key pair (if created)"
-  value       = var.key_name == "" ? aws_key_pair.instance_key[0].id : null
-}
 
 #===============================================================================
 # Scaling Policy Information
@@ -142,4 +130,9 @@ output "subnet_ids_used" {
 output "security_group_ids" {
   description = "Security group IDs attached to instances"
   value       = var.security_group_ids
+}
+
+output "instance_arns" {
+  description = "ARNs of EC2 instances"
+  value       = var.enable_auto_scaling ? [] : aws_instance.main[*].arn
 }

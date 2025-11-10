@@ -63,7 +63,7 @@ resource "aws_lb_target_group" "main" {
     enabled             = true
     healthy_threshold   = var.healthy_threshold
     interval            = var.health_check_interval
-    matcher             = var.health_check_matcher
+    matcher             = "200"
     path                = var.health_check_path
     port                = var.health_check_port
     protocol            = var.health_check_protocol

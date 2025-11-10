@@ -15,6 +15,22 @@ locals {
 }
 
 #===============================================================================
+# SSH Key Pair
+#===============================================================================
+
+resource "aws_key_pair" "instance_key" {
+  key_name   = "${local.name_prefix}-key"
+  public_key = file("~/.ssh/id_rsa.pub")
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-key"
+    }
+  )
+}
+
+#===============================================================================
 # VPC Module
 #===============================================================================
 
@@ -82,17 +98,17 @@ module "web_servers" {
   # Instance configuration
   ami_id        = var.ami_id
   instance_type = var.instance_type
-  key_name      = var.key_name
+  key_name      = aws_key_pair.instance_key.key_name
 
   # Networking
-  subnet_ids           = module.vpc.public_subnet_ids
-  security_group_ids   = [module.security.web_security_group_id]
-  associate_public_ip  = true
-  iam_instance_profile = module.security.instance_profile_name
+  subnet_ids          = module.vpc.public_subnet_ids
+  security_group_ids  = [module.security.web_security_group_id]
+  associate_public_ip = true
+  iam_instance_profile = ""  # Disabled for LocalStack compatibility
 
   # Scaling configuration (disabled for LocalStack)
-  enable_auto_scaling    = false
-  instance_count         = var.web_instance_count
+  enable_auto_scaling = false
+  instance_count      = var.web_instance_count
 
   # User data for web server initialization
   user_data_script = <<-EOF
@@ -161,17 +177,17 @@ module "app_servers" {
   # Instance configuration
   ami_id        = var.ami_id
   instance_type = var.instance_type
-  key_name      = var.key_name
+  key_name      = aws_key_pair.instance_key.key_name
 
   # Networking - use public subnets for LocalStack (no NAT)
-  subnet_ids           = module.vpc.public_subnet_ids
-  security_group_ids   = [module.security.app_security_group_id]
-  associate_public_ip  = true
-  iam_instance_profile = module.security.instance_profile_name
+  subnet_ids          = module.vpc.public_subnet_ids
+  security_group_ids  = [module.security.app_security_group_id]
+  associate_public_ip = true
+  iam_instance_profile = ""  # Disabled for LocalStack compatibility
 
   # Scaling configuration
-  enable_auto_scaling    = false
-  instance_count         = var.app_instance_count
+  enable_auto_scaling = false
+  instance_count      = var.app_instance_count
 
   # User data for app server initialization
   user_data_script = <<-EOF
@@ -226,8 +242,7 @@ module "loadbalancer" {
   health_check_timeout  = 5
 
   # HTTPS disabled for LocalStack
-  enable_https           = false
-  redirect_http_to_https = false
+  enable_https = false
 
   # Deletion protection disabled for easy cleanup
   enable_deletion_protection = false
@@ -255,7 +270,7 @@ module "monitoring" {
   )
 
   # Log configuration
-  log_group_names = [
+  log_groups = [
     "webserver",
     "application",
     "system",
@@ -264,7 +279,7 @@ module "monitoring" {
   log_retention_days = 7
 
   # Alarm configuration
-  alarm_email = var.alarm_email
+  alarm_emails = [var.alarm_email]
 
   # Thresholds
   cpu_threshold    = var.cpu_alarm_threshold
@@ -272,9 +287,9 @@ module "monitoring" {
   disk_threshold   = var.disk_alarm_threshold
 
   # Advanced monitoring (disabled for LocalStack)
-  enable_memory_alarms = false
-  enable_disk_alarms   = false
-  enable_dashboard     = var.enable_monitoring_dashboard
+  enable_memory_monitoring = false
+  enable_disk_monitoring   = false
+  enable_dashboard         = var.enable_monitoring_dashboard
 
   tags = local.common_tags
 

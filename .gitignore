@@ -1,17 +1,22 @@
 # Terraform
 *.tfstate
 *.tfstate.*
+*.tfstate.backup
 *.tfvars
 !*.tfvars.example
 .terraform/
 .terraform.lock.hcl
 tfplan
 crash.log
+*.tfbackup
+.terraform.providers/
 
 # Ansible
 *.retry
 .ansible/
 ansible.log
+ansible/inventory/hosts
+ansible/inventory/hosts.ini
 
 # IDE
 .vscode/
@@ -19,9 +24,17 @@ ansible.log
 *.swp
 *.swo
 *~
+.vim/
+.netrwhist
 
 # OS
 .DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Environment
@@ -30,14 +43,21 @@ Thumbs.db
 *.pem
 *.key
 !*.pub
+*.p12
+*.pfx
+*.crt
+!*.ca.crt
 
 # Logs
 *.log
 logs/
+*.out
+*.err
 
 # Docker
 docker-compose.override.yml
 localstack-data/
+docker-volumes/
 
 # Python
 __pycache__/
@@ -45,6 +65,208 @@ __pycache__/
 *$py.class
 venv/
 ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+.tox/
+.cache
+.mypy_cache
+.dmypy.json
+dmypy.json
 
-# Docs
+# Testing
+test-results.xml
+*-test-results.xml
+*.test
+junit.xml
+test-reports/
+coverage-reports/
+
+# Node.js (if any frontend tools are used)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.npm
+.eslintcache
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+.#*
+\#*#
+.*.swp
+.*.swo
+
+# Backup and archive files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+
+# Cloud provider specific
+.aws/
+.aws/cli/cache/
+.azure/
+.gcp/
+.google/
+oci/
+.kube/
+kubectl
+
+# Terraform cloud/enterprise
+.terraformrc
+terraform.rc
+.terraform.cloud
+.terraform.enterprise
+
+# LocalStack
+.localstack/
+localstack-data/
+
+# Pre-commit hooks
+.pre-commit-hooks.yaml
+
+# Make artifacts
+*.bin
+*.exe
+*.so
+*.dylib
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+.sphinx/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# SSH
+.ssh/known_hosts
+.ssh/known_hosts.old
+.ssh/id_rsa*
+.ssh/id_ecdsa*
+.ssh/id_ed25519*
+
+# AWS CLI
+.aws/credentials
+.aws/config
+
+# GCP CLI
+.gcloud/
+.application-default_credentials.json
+
+# Azure CLI
+.azure/azureProfile.json
+.azure/clouds.config
+.azure/config
+
+# OCI CLI
+.oci/
+
+# Kubernetes
+.kube/config
+*.kubeconfig
+
+# Helm
+charts/*.tgz
+
+# Terraform modules
+.terraform/modules/
+.terraform/plugin-cache
+
+# Local development
+local/
+dev/
+sandbox/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cost and monitoring
+cost-reports/
+monitoring-data/
+metrics/
+
+# Backup directories
+backups/
+backup-data/
+
+# Scripts output
+scripts/output/
+scripts/logs/
+scripts/tmp/
+
+# CI/CD artifacts
+artifacts/
+build/
+dist/
+
+# Security scanning results
+security-reports/
+vulnerability-reports/
+compliance-reports/
+
+# Performance testing
+performance-reports/
+load-test-results/
+
+# Infrastructure validation
+validation-reports/
+compliance-checks/
+
+# Documentation drafts
+docs/drafts/
+docs/wip/
+
+# LocalStack
+localstack-data/
+.localstack/
+
+# Docker volumes
+docker-volumes/
+docker-data/
+
+# Terraform validation
+tfsec-reports/
+checkov-reports/
+tflint-reports/
+
+# Ansible linting
+ansible-lint-reports/
+
+# Pre-commit
+.pre-commit-hooks.yaml
+
+
+# Status reports
 Project Docs

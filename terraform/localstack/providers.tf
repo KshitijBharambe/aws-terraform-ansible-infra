@@ -44,6 +44,5 @@ provider "aws" {
   }
 
   # LocalStack S3 configuration
-  s3_use_path_style   = true
-  s3_force_path_style = true
+  s3_use_path_style = true
 }

@@ -100,8 +100,6 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = local.nat_gateway_count
 
-  domain = "vpc"
-
   tags = merge(
     local.common_tags,
     {

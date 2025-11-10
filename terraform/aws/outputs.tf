@@ -38,55 +38,50 @@ output "app_security_group_id" {
   value       = module.security.app_security_group_id
 }
 
-output "alb_security_group_id" {
-  description = "ID of the ALB security group"
-  value       = module.security.alb_security_group_id
-}
-
-output "ssh_security_group_id" {
-  description = "ID of the SSH security group"
-  value       = module.security.ssh_security_group_id
+output "data_security_group_id" {
+  description = "ID of the data tier security group"
+  value       = module.security.data_security_group_id
 }
 
 # Compute Outputs
 output "web_server_instance_ids" {
   description = "List of web server instance IDs"
-  value       = module.web_servers[*].instance_id
+  value       = module.web_servers.instance_ids
 }
 
 output "web_server_public_ips" {
   description = "List of web server public IP addresses"
-  value       = module.web_servers[*].public_ip
+  value       = module.web_servers.instance_public_ips
 }
 
 output "web_server_private_ips" {
   description = "List of web server private IP addresses"
-  value       = module.web_servers[*].private_ip
+  value       = module.web_servers.instance_private_ips
 }
 
 output "app_server_instance_ids" {
   description = "List of application server instance IDs"
-  value       = module.app_servers[*].instance_id
+  value       = length(module.app_servers) > 0 ? module.app_servers[0].instance_ids : []
 }
 
 output "app_server_private_ips" {
   description = "List of application server private IP addresses"
-  value       = module.app_servers[*].private_ip
+  value       = length(module.app_servers) > 0 ? module.app_servers[0].instance_private_ips : []
 }
 
 output "all_instance_ids" {
   description = "List of all instance IDs"
-  value       = concat(
-    module.web_servers[*].instance_id,
-    module.app_servers[*].instance_id
+  value = concat(
+    module.web_servers.instance_ids,
+    length(module.app_servers) > 0 ? module.app_servers[0].instance_ids : []
   )
 }
 
 output "all_instance_public_ips" {
   description = "List of all instance public IP addresses"
-  value       = concat(
-    module.web_servers[*].public_ip,
-    module.app_servers[*].public_ip
+  value = concat(
+    module.web_servers.instance_public_ips,
+    length(module.app_servers) > 0 ? module.app_servers[0].instance_public_ips : []
   )
 }
 
@@ -206,8 +201,8 @@ output "ssh_connection_command" {
 output "web_access_urls" {
   description = "URLs to access web services"
   value = {
-    for idx, ip in module.web_servers[*].public_ip :
-    "web_server_${idx}" => "http://${ip}"
+    for idx, ip in module.web_servers.instance_public_ips :
+    "web_server_${idx}" => ip != "" ? "http://${ip}" : "No public IP"
   }
 }
 
@@ -218,10 +213,10 @@ output "load_balancer_url" {
 
 output "app_access_urls" {
   description = "URLs to access application services"
-  value = {
-    for idx, ip in module.app_servers[*].private_ip :
+  value = length(module.app_servers) > 0 ? {
+    for idx, ip in module.app_servers[0].instance_private_ips :
     "app_server_${idx}" => "http://${ip}:8080"
-  }
+  } : {}
 }
 
 # Ansible Inventory Outputs
@@ -230,46 +225,46 @@ output "ansible_inventory" {
   value = {
     webservers = {
       hosts = {
-        for idx, instance_id in module.web_servers[*].instance_id :
+        for idx, instance_id in module.web_servers.instance_ids :
         "web-${idx}" => {
-          ansible_host = module.web_servers[idx].public_ip
-          ansible_user = "ec2-user"
+          ansible_host                 = try(module.web_servers.instance_public_ips[idx], module.web_servers.instance_private_ips[idx])
+          ansible_user                 = "ec2-user"
           ansible_ssh_private_key_file = "${var.key_name}.pem"
-          ansible_python_interpreter = "/usr/bin/python3"
+          ansible_python_interpreter   = "/usr/bin/python3"
         }
       }
     }
-    appservers = {
+    appservers = length(module.app_servers) > 0 ? {
       hosts = {
-        for idx, instance_id in module.app_servers[*].instance_id :
+        for idx, instance_id in module.app_servers[0].instance_ids :
         "app-${idx}" => {
-          ansible_host = var.enable_nat_gateway ? module.app_servers[idx].private_ip : module.app_servers[idx].public_ip
-          ansible_user = "ec2-user"
+          ansible_host                 = var.enable_nat_gateway ? module.app_servers[0].instance_private_ips[idx] : try(module.app_servers[0].instance_public_ips[idx], module.app_servers[0].instance_private_ips[idx])
+          ansible_user                 = "ec2-user"
           ansible_ssh_private_key_file = "${var.key_name}.pem"
-          ansible_python_interpreter = "/usr/bin/python3"
+          ansible_python_interpreter   = "/usr/bin/python3"
         }
       }
-    }
+    } : { hosts = {} }
     _meta = {
       hostvars = merge(
         {
-          for idx, instance_id in module.web_servers[*].instance_id :
+          for idx, instance_id in module.web_servers.instance_ids :
           "web-${idx}" => {
             instance_id = instance_id
-            private_ip = module.web_servers[idx].private_ip
-            public_ip = module.web_servers[idx].public_ip
-            role = "webserver"
+            private_ip  = module.web_servers.instance_private_ips[idx]
+            public_ip   = try(module.web_servers.instance_public_ips[idx], "")
+            role        = "webserver"
           }
         },
-        {
-          for idx, instance_id in module.app_servers[*].instance_id :
+        length(module.app_servers) > 0 ? {
+          for idx, instance_id in module.app_servers[0].instance_ids :
           "app-${idx}" => {
             instance_id = instance_id
-            private_ip = module.app_servers[idx].private_ip
-            public_ip = module.app_servers[idx].public_ip
-            role = "appserver"
+            private_ip  = module.app_servers[0].instance_private_ips[idx]
+            public_ip   = try(module.app_servers[0].instance_public_ips[idx], "")
+            role        = "appserver"
           }
-        }
+        } : {}
       )
     }
   }
@@ -279,18 +274,18 @@ output "ansible_inventory" {
 output "deployment_summary" {
   description = "Summary of deployed infrastructure"
   value = {
-    project_name     = var.project_name
-    environment      = var.environment
-    region          = var.aws_region
-    vpc_id         = module.vpc.vpc_id
-    web_servers    = length(module.web_servers)
-    app_servers    = length(module.app_servers)
-    load_balancer  = var.enable_load_balancer
-    backup_enabled = var.enable_backup
+    project_name       = var.project_name
+    environment        = var.environment
+    region             = var.aws_region
+    vpc_id             = module.vpc.vpc_id
+    web_servers        = length(module.web_servers)
+    app_servers        = length(module.app_servers)
+    load_balancer      = var.enable_load_balancer
+    backup_enabled     = var.enable_backup
     monitoring_enabled = var.enable_cloudwatch_alarms
     cost_optimization = {
-      nat_gateway = var.enable_nat_gateway ? "enabled" : "disabled"
-      savings_plans = var.enable_savings_plans ? "enabled" : "disabled"
+      nat_gateway    = var.enable_nat_gateway ? "enabled" : "disabled"
+      savings_plans  = var.enable_savings_plans ? "enabled" : "disabled"
       spot_instances = var.enable_spot_instances ? "enabled" : "disabled"
     }
     deployment_time = timestamp()

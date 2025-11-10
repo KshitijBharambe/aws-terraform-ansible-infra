@@ -1,0 +1,355 @@
+---
+- name: Backup Configuration and Execution Playbook
+  hosts: all
+  become: yes
+  vars:
+    backup_enabled: "{{ backup_enabled | default(true) }}"
+    backup_type: "{{ backup_type | default('full') }}"
+    backup_retention_days: "{{ backup_retention_days | default(30) }}"
+    backup_s3_bucket: "{{ backup_s3_bucket | default('infra-backups') }}"
+    backup_s3_region: "{{ backup_s3_region | default('us-east-1') }}"
+    backup_notify_email: "{{ backup_notify_email | default('admin@company.com') }}"
+    backup_encryption_enabled: "{{ backup_encryption_enabled | default(true) }}"
+    backup_compress_enabled: "{{ backup_compress_enabled | default(true) }}"
+    backup_databases: "{{ backup_databases | default(['all']) }}"
+    backup_directories: "{{ backup_directories | default(['/etc', '/var/www', '/home', '/opt']) }}"
+    backup_exclude_patterns: "{{ backup_exclude_patterns | default(['*.tmp', '*.log', '/var/cache']) }}"
+    backup_schedule_enabled: "{{ backup_schedule_enabled | default(true) }}"
+    backup_time_window: "{{ backup_time_window | default('02:00-04:00') }}"
+
+  pre_tasks:
+    - name: Load backup variables
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+        - "{{ ansible_os_family | lower }}.yml"
+        - "default.yml"
+      tags: always
+
+    - name: Check if backup is enabled
+      fail:
+        msg: "Backup is disabled. Set backup_enabled=true to enable."
+      when: not backup_enabled
+      tags: validation
+
+    - name: Validate backup type
+      fail:
+        msg: "Invalid backup type: {{ backup_type }}. Must be 'full', 'incremental', or 'differential'."
+      when: backup_type not in ['full', 'incremental', 'differential']
+      tags: validation
+
+    - name: Create backup directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /var/backups
+        - /var/backups/config
+        - /var/backups/database
+        - /var/backups/application
+        - /var/backups/logs
+        - /var/backups/temp
+      tags: setup
+
+    - name: Create backup user if not exists
+      user:
+        name: backup
+        group: backup
+        system: yes
+        shell: /bin/bash
+        home: /var/backups
+        create_home: yes
+      tags: setup
+      when: backup_enabled
+
+    - name: Setup backup sudoers entry
+      lineinfile:
+        path: /etc/sudoers.d/backup
+        line: "backup ALL=(ALL) NOPASSWD: /usr/local/bin/backup-*.sh"
+        state: present
+        create: yes
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+      tags: setup
+      when: backup_enabled
+
+  roles:
+    - role: common
+      tags: common
+      when: backup_enabled
+
+    - role: backup
+      tags: backup-config
+      vars:
+        backup_config_enabled: "{{ backup_enabled }}"
+        backup_config_type: "{{ backup_type }}"
+        backup_config_retention: "{{ backup_retention_days }}"
+        backup_config_s3_bucket: "{{ backup_s3_bucket }}"
+        backup_config_s3_region: "{{ backup_s3_region }}"
+        backup_config_encryption: "{{ backup_encryption_enabled }}"
+        backup_config_compression: "{{ backup_compress_enabled }}"
+        backup_config_databases: "{{ backup_databases }}"
+        backup_config_directories: "{{ backup_directories }}"
+        backup_config_exclude: "{{ backup_exclude_patterns }}"
+        backup_config_notify_email: "{{ backup_notify_email }}"
+
+  post_tasks:
+    - name: Generate backup configuration file
+      template:
+        src: backup-config.j2
+        dest: /etc/backup/backup.conf
+        owner: root
+        group: backup
+        mode: "0640"
+      tags: configuration
+      when: backup_enabled
+      notify: reload backup configuration
+
+    - name: Create system backup script
+      template:
+        src: system-backup.sh.j2
+        dest: /usr/local/bin/system-backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled
+
+    - name: Create database backup scripts
+      template:
+        src: database-backup.sh.j2
+        dest: /usr/local/bin/database-backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled and backup_databases | length > 0
+
+    - name: Create application backup script
+      template:
+        src: application-backup.sh.j2
+        dest: /usr/local/bin/application-backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled
+
+    - name: Create log backup script
+      template:
+        src: log-backup.sh.j2
+        dest: /usr/local/bin/log-backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled
+
+    - name: Create configuration backup script
+      template:
+        src: config-backup.sh.j2
+        dest: /usr/local/bin/config-backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled
+
+    - name: Create backup verification script
+      template:
+        src: backup-verify.sh.j2
+        dest: /usr/local/bin/backup-verify.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled
+
+    - name: Create backup cleanup script
+      template:
+        src: backup-cleanup.sh.j2
+        dest: /usr/local/bin/backup-cleanup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: scripts
+      when: backup_enabled
+
+    - name: Create S3 backup configuration
+      template:
+        src: s3-backup-config.j2
+        dest: /etc/backup/s3-config.conf
+        owner: backup
+        group: backup
+        mode: "0600"
+      tags: configuration
+      when: backup_enabled
+
+    - name: Create backup monitoring script
+      template:
+        src: backup-monitor.sh.j2
+        dest: /usr/local/bin/backup-monitor.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: monitoring
+      when: backup_enabled
+
+    - name: Setup backup log rotation
+      template:
+        src: backup-logrotate.j2
+        dest: /etc/logrotate.d/backup
+        owner: root
+        group: root
+        mode: "0644"
+      tags: logging
+      when: backup_enabled
+
+    - name: Create backup report script
+      template:
+        src: backup-report.sh.j2
+        dest: /usr/local/bin/backup-report.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: reporting
+      when: backup_enabled
+
+    - name: Setup cron job for daily backup
+      cron:
+        name: "Daily Backup Job"
+        job: "/usr/local/bin/system-backup.sh {{ backup_type }}"
+        hour: "2"
+        minute: "0"
+        user: backup
+        state: present
+      tags: scheduling
+      when: backup_schedule_enabled and backup_enabled
+
+    - name: Setup cron job for weekly full backup
+      cron:
+        name: "Weekly Full Backup"
+        job: "/usr/local/bin/system-backup.sh full"
+        weekday: "0" # Sunday
+        hour: "1"
+        minute: "0"
+        user: backup
+        state: present
+      tags: scheduling
+      when: backup_schedule_enabled and backup_type != 'full' and backup_enabled
+
+    - name: Setup cron job for backup verification
+      cron:
+        name: "Backup Verification"
+        job: "/usr/local/bin/backup-verify.sh"
+        hour: "6"
+        minute: "0"
+        user: backup
+        state: present
+      tags: scheduling
+      when: backup_schedule_enabled and backup_enabled
+
+    - name: Setup cron job for backup cleanup
+      cron:
+        name: "Backup Cleanup"
+        job: "/usr/local/bin/backup-cleanup.sh {{ backup_retention_days }}"
+        hour: "3"
+        minute: "30"
+        user: backup
+        state: present
+      tags: scheduling
+      when: backup_schedule_enabled and backup_enabled
+
+    - name: Setup cron job for backup monitoring
+      cron:
+        name: "Backup Monitoring"
+        job: "/usr/local/bin/backup-monitor.sh"
+        minute: "*/15"
+        user: backup
+        state: present
+      tags: monitoring
+      when: backup_enabled
+
+    - name: Setup cron job for backup reporting
+      cron:
+        name: "Backup Reporting"
+        job: "/usr/local/bin/backup-report.sh daily"
+        hour: "8"
+        minute: "0"
+        weekday: "1-5" # Monday to Friday
+        user: backup
+        state: present
+      tags: reporting
+      when: backup_enabled and backup_notify_email != ''
+
+    - name: Test backup configuration
+      command: /usr/local/bin/backup-verify.sh --test
+      register: backup_test
+      tags: testing
+      when: backup_enabled
+      ignore_errors: yes
+
+    - name: Display backup configuration status
+      debug:
+        msg: |
+          Backup Enabled: {{ backup_enabled }}
+          Backup Type: {{ backup_type }}
+          Retention Days: {{ backup_retention_days }}
+          S3 Bucket: {{ backup_s3_bucket }}
+          Encryption: {{ backup_encryption_enabled }}
+          Compression: {{ backup_compress_enabled }}
+          Scheduling: {{ backup_schedule_enabled }}
+          Test Result: {{ 'PASS' if backup_test.rc == 0 else 'FAIL' }}
+      tags: verification
+
+    - name: Display backup directories to be backed up
+      debug:
+        msg: "Backup Directories: {{ backup_directories | join(', ') }}"
+      tags: verification
+      when: backup_enabled
+
+    - name: Display databases to be backed up
+      debug:
+        msg: "Backup Databases: {{ backup_databases | join(', ') }}"
+      tags: verification
+      when: backup_enabled and backup_databases | length > 0
+
+    - name: Create backup service file
+      template:
+        src: backup.service.j2
+        dest: /etc/systemd/system/backup.service
+        owner: root
+        group: root
+        mode: "0644"
+      tags: service
+      when: backup_enabled
+      notify: reload systemd
+
+    - name: Enable and start backup service
+      systemd:
+        name: backup.service
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      tags: service
+      when: backup_enabled
+
+  handlers:
+    - name: reload backup configuration
+      systemd:
+        name: backup.service
+        state: reloaded
+      listen: "reload backup configuration"
+
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+      listen: "reload systemd"
+# Example usage:
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/backup.yml
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/backup.yml -e "backup_type=full backup_retention_days=60"
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/backup.yml --tags "configuration"
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/backup.yml --tags "scheduling"

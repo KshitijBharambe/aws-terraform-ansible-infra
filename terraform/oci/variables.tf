@@ -85,7 +85,7 @@ variable "instance_shape" {
   description = "Shape of the compute instance"
   type        = string
   default     = "VM.Standard2.1"
-  
+
   # Free tier eligible shapes
   validation {
     condition     = contains(["VM.Standard2.1", "VM.Standard.E2.1.Micro", "VM.Standard.A1.Flex"], var.instance_shape)
@@ -158,7 +158,7 @@ variable "load_balancer_shape" {
   description = "Shape of the load balancer"
   type        = string
   default     = "flexible"
-  
+
   validation {
     condition     = contains(["flexible", "100Mbps", "400Mbps"], var.load_balancer_shape)
     error_message = "Load balancer shape must be one of: flexible, 100Mbps, 400Mbps."
@@ -221,7 +221,7 @@ variable "freeform_tags" {
   type        = map(string)
   default = {
     "Project"     = "Infrastructure Automation"
-    "Environment"  = "Development"
+    "Environment" = "Development"
     "ManagedBy"   = "Terraform"
     "CostCenter"  = "Engineering"
   }
@@ -230,7 +230,7 @@ variable "freeform_tags" {
 variable "defined_tags" {
   description = "Defined tags for resources"
   type        = map(string)
-  default = {}
+  default     = {}
 }
 
 # Cost Optimization Variables

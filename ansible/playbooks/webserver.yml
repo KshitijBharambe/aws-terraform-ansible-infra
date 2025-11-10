@@ -1,0 +1,207 @@
+---
+- name: Web Server Configuration Playbook
+  hosts: webservers
+  become: yes
+  vars:
+    webserver_type: "{{ webserver_type | default('nginx') }}"
+    enable_ssl: "{{ enable_ssl | default(true) }}"
+    enable_monitoring: "{{ enable_monitoring | default(true) }}"
+    enable_backup: "{{ enable_backup | default(true) }}"
+    webserver_user: "{{ webserver_user | default('www-data') }}"
+    webserver_group: "{{ webserver_group | default('www-data') }}"
+
+  pre_tasks:
+    - name: Load web server variables
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+        - "{{ ansible_os_family | lower }}.yml"
+        - "default.yml"
+      tags: always
+
+    - name: Create web server user if not exists
+      user:
+        name: "{{ webserver_user }}"
+        group: "{{ webserver_group }}"
+        system: yes
+        shell: /sbin/nologin
+        home: /var/www
+        create_home: no
+      when: webserver_user != 'www-data'
+      tags: user-setup
+
+    - name: Create web directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ webserver_user }}"
+        group: "{{ webserver_group }}"
+        mode: "0755"
+      loop:
+        - /var/www/html
+        - /var/www/logs
+        - /var/www/ssl
+        - /etc/webserver
+      tags: directories
+
+  roles:
+    - role: common
+      tags: common
+
+    - role: security
+      tags: security-hardening
+      when: security_hardening_enabled | default(true)
+
+    - role: webserver
+      tags: webserver-config
+      vars:
+        webserver_install_type: "{{ webserver_type }}"
+        webserver_enable_ssl: "{{ enable_ssl }}"
+        webserver_enable_monitoring: "{{ enable_monitoring }}"
+        webserver_enable_backup: "{{ enable_backup }}"
+        webserver_document_root: "/var/www/html"
+        webserver_log_dir: "/var/www/logs"
+        webserver_ssl_dir: "/var/www/ssl"
+        webserver_config_dir: "/etc/webserver"
+
+  post_tasks:
+    - name: Deploy sample application
+      template:
+        src: sample-app.html.j2
+        dest: /var/www/html/index.html
+        owner: "{{ webserver_user }}"
+        group: "{{ webserver_group }}"
+        mode: "0644"
+      tags: application
+      notify:
+        - restart webserver
+        - reload webserver
+
+    - name: Create health check endpoint
+      template:
+        src: health-check.j2
+        dest: /var/www/html/health
+        owner: "{{ webserver_user }}"
+        group: "{{ webserver_group }}"
+        mode: "0644"
+      tags: health-check
+
+    - name: Configure web server monitoring
+      template:
+        src: webserver-monitor.sh.j2
+        dest: /usr/local/bin/webserver-monitor.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: monitoring
+      when: enable_monitoring
+
+    - name: Setup web server log rotation
+      template:
+        src: webserver-logrotate.j2
+        dest: /etc/logrotate.d/webserver
+        owner: root
+        group: root
+        mode: "0644"
+      tags: logging
+      when: enable_backup
+
+    - name: Apply web server performance tuning
+      template:
+        src: webserver-tuning.sh.j2
+        dest: /usr/local/bin/webserver-tuning.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: performance
+      notify: apply webserver tuning
+
+    - name: Create web server backup script
+      template:
+        src: webserver-backup.sh.j2
+        dest: /usr/local/bin/webserver-backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+      tags: backup
+      when: enable_backup
+
+    - name: Setup cron job for web server monitoring
+      cron:
+        name: "Web Server Health Check"
+        job: "/usr/local/bin/webserver-monitor.sh"
+        minute: "*/5"
+        user: root
+        state: present
+      tags: monitoring
+      when: enable_monitoring
+
+    - name: Setup cron job for web server backup
+      cron:
+        name: "Web Server Backup"
+        job: "/usr/local/bin/webserver-backup.sh"
+        hour: "2"
+        minute: "0"
+        user: root
+        state: present
+      tags: backup
+      when: enable_backup
+
+    - name: Verify web server is running
+      systemd:
+        name: "{{ 'nginx' if webserver_type == 'nginx' else 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+        state: started
+        enabled: yes
+      register: webserver_status
+      tags: verification
+
+    - name: Wait for web server to be ready
+      wait_for:
+        port: "{{ 443 if enable_ssl else 80 }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+        timeout: 60
+      tags: verification
+
+    - name: Test web server response
+      uri:
+        url: "http{{ 's' if enable_ssl else '' }}://{{ ansible_default_ipv4.address }}/"
+        method: GET
+        status_code: [200, 301, 302]
+        timeout: 30
+      register: webserver_test
+      tags: verification
+      ignore_errors: yes
+
+    - name: Display web server status
+      debug:
+        msg: |
+          Web Server Status: {{ webserver_status.status }}
+          Web Server Test: {{ 'PASS' if webserver_test.status == 200 else 'FAIL' }}
+          Web Server Type: {{ webserver_type }}
+          SSL Enabled: {{ enable_ssl }}
+          Monitoring Enabled: {{ enable_monitoring }}
+          Backup Enabled: {{ enable_backup }}
+      tags: verification
+
+  handlers:
+    - name: restart webserver
+      systemd:
+        name: "{{ 'nginx' if webserver_type == 'nginx' else 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+        state: restarted
+      listen: "restart webserver"
+
+    - name: reload webserver
+      systemd:
+        name: "{{ 'nginx' if webserver_type == 'nginx' else 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+        state: reloaded
+      listen: "reload webserver"
+
+    - name: apply webserver tuning
+      command: /usr/local/bin/webserver-tuning.sh
+      listen: "apply webserver tuning"
+      notify: reload webserver
+# Example usage:
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/webserver.yml
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/webserver.yml -e "webserver_type=nginx enable_ssl=true"
+# ansible-playbook -i inventory/aws_ec2.yml playbooks/webserver.yml --tags "security-hardening"

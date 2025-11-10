@@ -41,13 +41,13 @@ variable "cost_optimization_enabled" {
 variable "enable_spot_instances" {
   description = "Use spot instances for cost savings"
   type        = bool
-  default     = false  # Disabled for reliability in demos
+  default     = false # Disabled for reliability in demos
 }
 
 variable "enable_savings_plans" {
   description = "Enable AWS Savings Plans"
   type        = bool
-  default     = false  # Disabled for on-demand demos
+  default     = false # Disabled for on-demand demos
 }
 
 variable "cost_tracking_tags" {
@@ -66,7 +66,7 @@ variable "cost_tracking_tags" {
 variable "terraform_state_bucket" {
   description = "S3 bucket for Terraform state"
   type        = string
-  default     = ""  # Must be provided
+  default     = "" # Must be provided
 }
 
 variable "terraform_state_key" {
@@ -84,7 +84,7 @@ variable "terraform_lock_table" {
 variable "terraform_state_access_arns" {
   description = "ARNs allowed to access Terraform state"
   type        = list(string)
-  default     = []  # Will be set to current user ARN
+  default     = [] # Will be set to current user ARN
 }
 
 variable "terraform_log_retention_days" {
@@ -121,7 +121,7 @@ variable "private_subnet_cidrs" {
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway (adds $33/month)"
   type        = bool
-  default     = false  # CRITICAL: Disabled for cost optimization
+  default     = false # CRITICAL: Disabled for cost optimization
 }
 
 variable "enable_vpn_gateway" {
@@ -134,31 +134,31 @@ variable "enable_vpn_gateway" {
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t4g.micro"  # ARM-based, cheapest viable option
+  default     = "t4g.micro" # ARM-based, cheapest viable option
 }
 
 variable "ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
-  default     = ""  # Will be looked up based on region
+  default     = "" # Will be looked up based on region
 }
 
 variable "key_name" {
   description = "SSH key name for EC2 instances"
   type        = string
-  default     = ""  # Must be provided
+  default     = "" # Must be provided
 }
 
 variable "instance_count" {
   description = "Number of EC2 instances to create"
   type        = number
-  default     = 1  # Minimal for cost optimization
+  default     = 1 # Minimal for cost optimization
 }
 
 variable "enable_auto_scaling" {
   description = "Enable Auto Scaling Group"
   type        = bool
-  default     = false  # Disabled for cost optimization
+  default     = false # Disabled for cost optimization
 }
 
 variable "min_size" {
@@ -182,26 +182,26 @@ variable "desired_capacity" {
 variable "root_volume_size" {
   description = "Size of root volume in GB"
   type        = number
-  default     = 8  # Minimum viable size
+  default     = 8 # Minimum viable size
 }
 
 variable "root_volume_type" {
   description = "Type of root volume"
   type        = string
-  default     = "gp3"  # Cost-effective storage
+  default     = "gp3" # Cost-effective storage
 }
 
 # Security Variables
 variable "allowed_ssh_cidr_blocks" {
   description = "CIDR blocks allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Should be restricted in production
+  default     = ["0.0.0.0/0"] # Should be restricted in production
 }
 
 variable "web_allowed_cidr_blocks" {
   description = "CIDR blocks allowed for web access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Web access from anywhere
+  default     = ["0.0.0.0/0"] # Web access from anywhere
 }
 
 variable "ssh_port" {
@@ -226,7 +226,7 @@ variable "ssl_port" {
 variable "enable_load_balancer" {
   description = "Enable Application Load Balancer (adds $22/month)"
   type        = bool
-  default     = false  # Disabled for cost optimization
+  default     = false # Disabled for cost optimization
 }
 
 variable "load_balancer_type" {
@@ -250,7 +250,7 @@ variable "health_check_interval" {
 variable "enable_ssl" {
   description = "Enable SSL termination"
   type        = bool
-  default     = false  # Disabled for cost optimization
+  default     = false # Disabled for cost optimization
 }
 
 variable "certificate_arn" {
@@ -275,7 +275,7 @@ variable "enable_cloudwatch_alarms" {
 variable "alarm_email" {
   description = "Email address for alarm notifications"
   type        = string
-  default     = ""  # Must be provided for alarms
+  default     = "" # Must be provided for alarms
 }
 
 variable "cpu_threshold" {
@@ -312,7 +312,7 @@ variable "backup_retention_days" {
 variable "backup_schedule" {
   description = "Backup schedule in cron format"
   type        = string
-  default     = "0 2 * * *"  # Daily at 2 AM
+  default     = "0 2 * * *" # Daily at 2 AM
 }
 
 # Advanced Configuration Variables
@@ -355,26 +355,26 @@ variable "domain_name" {
 variable "enable_cloudfront" {
   description = "Enable CloudFront CDN"
   type        = bool
-  default     = false  # Disabled for cost optimization
+  default     = false # Disabled for cost optimization
 }
 
 variable "enable_waf" {
   description = "Enable AWS WAF"
   type        = bool
-  default     = false  # Disabled for cost optimization
+  default     = false # Disabled for cost optimization
 }
 
 # Cost Control Variables
 variable "monthly_budget_limit" {
   description = "Monthly budget limit in USD"
   type        = number
-  default     = 15  # Alert at $15/month
+  default     = 15 # Alert at $15/month
 }
 
 variable "budget_threshold" {
   description = "Budget alert threshold percentage"
   type        = number
-  default     = 80  # Alert at 80% of budget
+  default     = 80 # Alert at 80% of budget
 }
 
 variable "enable_cost_anomaly_detection" {
@@ -387,17 +387,17 @@ variable "enable_cost_anomaly_detection" {
 variable "deployment_duration_hours" {
   description = "Expected deployment duration in hours"
   type        = number
-  default     = 3  # 3-hour demo sessions
+  default     = 3 # 3-hour demo sessions
 }
 
 variable "enable_auto_cleanup" {
   description = "Enable automatic cleanup after deployment"
   type        = bool
-  default     = false  # Manual cleanup for demos
+  default     = false # Manual cleanup for demos
 }
 
 variable "cleanup_delay_hours" {
   description = "Delay before automatic cleanup in hours"
   type        = number
-  default     = 24  # Cleanup after 24 hours
+  default     = 24 # Cleanup after 24 hours
 }
